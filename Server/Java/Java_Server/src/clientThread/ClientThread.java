@@ -41,18 +41,21 @@ public class ClientThread implements Runnable {
 	}
 	
 	private String buildStatus(){
-		outBuilder = new StringBuilder("Status ");
+		outBuilder = new StringBuilder("<Status>");
+		outBuilder.append("<Messages>");
 		outBuilder.append(totalMsgs);
-		outBuilder.append(" Messages");
-		outBuilder.append(" Wasser:");
+		outBuilder.append("</Messages>");
+		outBuilder.append("<Wasser>");
 		if(parent.isWaterstatus()){
 			outBuilder.append("An");
 		}else{
 			outBuilder.append("Aus");
 		}
+		outBuilder.append("</Wasser>");
 		outBuilder.append("<Temperatur>");
 		outBuilder.append(Integer.toString(parent.getWasserTemp()));
 		outBuilder.append("</Temperatur>");
+		outBuilder.append("</Status>");
 		return outBuilder.toString();
 	}
 	

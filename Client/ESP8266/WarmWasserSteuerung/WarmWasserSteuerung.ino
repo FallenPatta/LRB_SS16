@@ -275,15 +275,15 @@ void setup() {
 
 uint32_t processReply(String s) {
   uint32_t color1 = 0;
-  String comp = "Wasser:";
-  int num = s.indexOf("Wasser:");
+  String comp = "<Wasser>";
+  int num = s.indexOf("<Wasser>");
   if (num >= 0) {
     num = num + comp.length();
-    if(s.indexOf("Wasser:An") >= 0){
+    if(s.indexOf("<Wasser>An") >= 0){
       Serial.println("Wasser:AN");
       wasserStatus = true;
     }
-    if(s.indexOf("Wasser:Aus") >= 0){
+    if(s.indexOf("<Wasser>Aus") >= 0){
       Serial.println("Wasser:AUS");
       wasserStatus = false;
     }
@@ -301,12 +301,12 @@ uint32_t processReply(String s) {
   else {
   }
 
-  comp = "Status";
-  int stat = s.indexOf("Status");
-  int mess = s.indexOf("Messages");
+  comp = "<Messages>";
+  int stat = s.indexOf("<Messages>");
+  int mess = s.indexOf("</Messages>");
   if (mess >= 0 && stat >= 0) {
     stat = stat + comp.length();
-    String msgNum = s.substring(stat, mess - 1);
+    String msgNum = s.substring(stat, mess);
     int numMsgs = msgNum.toInt();
     Serial.print("Message Index: ");
     Serial.println(numMsgs);
