@@ -1,2 +1,2 @@
-# LRB_SS16
-Files für LRB im Sommersemester 2016
+# Steuerung einer Heizung mittels ESP8266
+
