@@ -1,6 +1,7 @@
 package clientThread;
 
 import java.net.*;
+import java.util.Iterator;
 import java.io.*;
 
 public class ClientThread implements Runnable {
@@ -9,13 +10,42 @@ public class ClientThread implements Runnable {
 	private Socket client;
 	private StringBuilder outBuilder;
 	private Integer index;
-	boolean isDead;
+	private boolean waterstatus = false;
+	private int wasserTemp = 0;
+	private boolean isDead;
+	private int portNumber = 50007;
+	private int totalMsgs = 0;
+	
+	private void WAIT(int millis){
+		try{
+			Thread.sleep(millis);
+		}catch(Exception e){
+			
+		}
+	}
 	
 	public ClientThread(Socket clientSocket, Integer ind){
 		super();
 		this.client = clientSocket;
 		this.index = ind;
 		this.isDead = false;
+		
+		
+		Thread checkForDead = new Thread(new Runnable(){
+			public void run(){
+				while(!isDead){
+					if(waterstatus){
+						if(wasserTemp < 255) wasserTemp++;
+					}else if(wasserTemp > 0){
+						wasserTemp--;
+					}
+					WAIT(250);
+				}
+			}
+		});
+		
+		checkForDead.start();
+		
 	}
 	
 	public boolean isConnected(){
@@ -24,14 +54,26 @@ public class ClientThread implements Runnable {
 		return true;
 	}
 	
+	private String buildStatus(){
+		outBuilder = new StringBuilder("Status ");
+		outBuilder.append(totalMsgs);
+		outBuilder.append(" Messages");
+		outBuilder.append(" Wasser:");
+		if(waterstatus){
+			outBuilder.append("An");
+		}else{
+			outBuilder.append("Aus");
+		}
+		outBuilder.append("<Temperatur>");
+		outBuilder.append(Integer.toString(wasserTemp));
+		outBuilder.append("</Temperatur>");
+		return outBuilder.toString();
+	}
+	
 	@Override
 	public void run() {
 		
 		System.out.println("STARTING");
-		
-		int portNumber = 50007;
-		int totalMsgs = 0;
-		boolean waterstatus = false;
 		
 		try ( 
 			    PrintWriter out = new PrintWriter(client.getOutputStream(), true);
@@ -50,31 +92,12 @@ public class ClientThread implements Runnable {
 			    	System.out.println("Input: " + inputLine);
 			    	
 			    	if(inputLine.equals("SendStatus")){
-			    		outBuilder = new StringBuilder("Status ");
-			    		outBuilder.append(totalMsgs);
-			    		outBuilder.append(" Messages");
-			    		outBuilder.append(" Wasser:");
-			    		if(waterstatus){
-			    			outBuilder.append("An");
-			    		}else{
-			    			outBuilder.append("Aus");
-			    		}
-			    		outputLine = outBuilder.toString();
+			    		outputLine = buildStatus();
 			    		System.out.println("Sending Status: " + outputLine);
 			    	}else if(inputLine.equals("TurnOn")){
-			    		outBuilder = new StringBuilder("Status ");
-			    		outBuilder.append(totalMsgs);
-			    		outBuilder.append(" Messages");
-			    		outBuilder.append(" Wasser:");
 			    		waterstatus = !waterstatus;
-			    		if(waterstatus){
-			    			outBuilder.append("An");
-			    			System.out.println("Wasser: an");
-			    		}else{
-			    			outBuilder.append("Aus");
-			    			System.out.println("Wasser: aus");
-			    		}
-			    		outputLine = outBuilder.toString();
+			    		outputLine = buildStatus();
+			    		System.out.println("Sending Status: " + outputLine);
 			    	}
 			    	else{
 				        outputLine = "OK";

@@ -13,6 +13,9 @@
   #include <avr/power.h>
 #endif
 
+#define GAUSSMASK 7  //ganze ungerade Zahl
+#define GAUSSMASK_2 GAUSSMASK/2
+
 const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 
 //const char hotwater[] = "TurnOn\n\0";
@@ -20,10 +23,14 @@ const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 const char* ssid     = "GladOS-Net";
 const char* password = "thecakeisalie";
 
-const char* host = "192.168.0.49";
+const char* host = "192.168.0.51";
 
 long lastSend = 0;
 long keepAlive = 0;
+
+//Zustände
+int wasserTemp = 0;
+bool wasserStatus = false;
 
 volatile char sendQueue[256];
 
@@ -31,15 +38,27 @@ IPAddress ip(192, 168, 0, 50);
 IPAddress gate(192, 168, 0, 1);
 IPAddress net(255, 255, 255, 0);
 
-#define NUMLED  3
+WiFiClient client;
+
+#define NUMLED  24
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, D3, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel statusLED = Adafruit_NeoPixel(1, D2, NEO_GRB + NEO_KHZ800);
 
 boolean convergeLED(int num, double toR, double toG, double toB, int wait, boolean show, double thres = 1, double velo = 1);
 
-double r, g, b;
-int rVal, gVal, bVal;
+double gauss[GAUSSMASK];
+
+//double r, g, b;
+double r[NUMLED];
+double g[NUMLED];
+double b[NUMLED];
+double rVal[NUMLED];
+double gVal[NUMLED];
+double bVal[NUMLED];
+
+const uint32_t ledWarm = strip.Color(120,0,0);
+const uint32_t ledKalt = strip.Color(60,60,120);
 
 uint8_t gammatable[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
@@ -72,21 +91,45 @@ boolean convergeLED(int num, double toR, double toG, double toB, int wait, boole
   int thres2 = velo+1;
   boolean diverging = false; 
   double fr=1, fg=1, fb = 1;
-  if(abs(toR - r) > thres2) fr *= velo;
-  if(abs(toG - g) > thres2) fg *= velo;
-  if(abs(toB - b) > thres2) fb *= velo;
+  if(abs(toR - r[num]) > thres2) fr *= velo;
+  if(abs(toG - g[num]) > thres2) fg *= velo;
+  if(abs(toB - b[num]) > thres2) fb *= velo;
   
-  if(abs(toR - r) > thres & toR - r > 0){ r += fr; diverging = true;}
-  if(abs(toR - r) > thres & toR - r < 0){ r -= fr; diverging = true;}
+  if(abs(toR - r[num]) > thres & toR - r[num] > 0){ r[num] += fr; diverging = true;}
+  if(abs(toR - r[num]) > thres & toR - r[num] < 0){ r[num] -= fr; diverging = true;}
   
-  if(abs(toG - g) > thres & toG - g > 0){ g += fg; diverging = true;}
-  if(abs(toG - g) > thres & toG - g < 0){ g -= fg; diverging = true;}
+  if(abs(toG - g[num]) > thres & toG - g[num] > 0){ g[num] += fg; diverging = true;}
+  if(abs(toG - g[num]) > thres & toG - g[num] < 0){ g[num] -= fg; diverging = true;}
   
-  if(abs(toB - b) > thres & toB - b > 0){ b += fb; diverging = true;}
-  if(abs(toB - b) > thres & toB - b < 0){ b -= fb; diverging = true;}
+  if(abs(toB - b[num]) > thres & toB - b[num] > 0){ b[num] += fb; diverging = true;}
+  if(abs(toB - b[num]) > thres & toB - b[num] < 0){ b[num] -= fb; diverging = true;}
   
   if(diverging)delay(wait);
   return diverging;
+}
+
+void blurPattern(double * r, double * g, double * b, int numTimes = 1){
+  if(numTimes<1) numTimes = 1;
+  for(int i = 0; i<numTimes; i++){
+     double blurR[NUMLED], blurG[NUMLED], blurB[NUMLED];
+     for(int i = 0; i<NUMLED; i++){
+       for(int j = 0; j<NUMLED; j++){
+        blurR[j] = blurG[j] = blurB[j] = 0; 
+       }
+     int ringVal[GAUSSMASK];
+        for(int j = -(GAUSSMASK_2); j<(GAUSSMASK_2)+1; j++){
+            ringVal[j+(GAUSSMASK_2)] = i+j;
+            if(ringVal[j+(GAUSSMASK_2)] < 0)ringVal[j+GAUSSMASK_2] += NUMLED;
+            ringVal[j+GAUSSMASK_2] = ringVal[j+GAUSSMASK_2] % NUMLED;
+        }
+        for(int j = 0; j<GAUSSMASK; j++){
+            blurR[i] += r[ringVal[j]] * gauss[j];
+            blurG[i] += g[ringVal[j]] * gauss[j];
+            blurB[i] += b[ringVal[j]] * gauss[j];
+        }
+        r[i] = blurR[i]; g[i] = blurG[i]; b[i] = blurB[i];
+     }
+  }
 }
 
 void setStatus(uint32_t c){
@@ -94,10 +137,16 @@ void setStatus(uint32_t c){
     statusLED.show();
 }
 
-void setWasserStatus(uint8_t x, uint8_t y, uint8_t z){
-    rVal = x;
-    gVal = y;
-    bVal = z;
+//void setPixelSollWert(int num, uint8_t x, uint8_t y, uint8_t z){
+//  rVal[num] = x;
+//  gVal[num] = y;
+//  bVal[num] = z;
+//}
+
+void setPixelSollWert(int num, uint32_t c){
+  rVal[num] = ((uint8_t)(c >> 16 & 255));
+  gVal[num] = ((uint8_t)(c >> 8 & 255));
+  bVal[num] = ((uint8_t)(c & 255));
 }
 
 void stripSetup() {
@@ -176,10 +225,10 @@ void enqueue(const char* s){
         if(s[i] == '\0') Serial.print("NULL");
     }
     sendQueue[nullInd + strlen(s)] = '\0';
-    Serial.println("enqueued");
+/*    Serial.println("enqueued");
     Serial.println("waiting to send:");
     for (int i = 0; i < sizeof(sendQueue) & !sendQueue[i] == '\0'; i++) Serial.print(sendQueue[i]);
-    Serial.println();
+    Serial.println();*/
 }
 
 void handlePCINT_1() {
@@ -211,12 +260,14 @@ void pinSetup() {
 
 void setup() {
   if(!Serial) Serial.begin(115200);
+  for(int i = -((GAUSSMASK)/2); i<((GAUSSMASK)/2)+1; i++){
+   gauss[i+GAUSSMASK_2] =  1/(sqrt(2*PI)) * pow(EULER,(-0.5 * pow(i,2)));
+  }
   sendQueue[0] = '\0';
   pinSetup();
   stripSetup();
   wifiScan();
   wifiConnect();
-
 }
 
 uint32_t processReply(String s) {
@@ -225,14 +276,24 @@ uint32_t processReply(String s) {
   int num = s.indexOf("Wasser:");
   if (num >= 0) {
     num = num + comp.length();
-    if (s.substring(num).equals("An")) {
+    if(s.indexOf("Wasser:An") >= 0){
       Serial.println("Wasser:AN");
-      setWasserStatus(150,0,0);
+      wasserStatus = true;
     }
-    if (s.substring(num).equals("Aus")) {
+    if(s.indexOf("Wasser:Aus") >= 0){
       Serial.println("Wasser:AUS");
-      setWasserStatus(100,100,160);
+      wasserStatus = false;
     }
+  }
+  comp = "<Temperatur>";
+  num = s.indexOf("<Temperatur>");
+  if(num >= 0){
+    num = num + comp.length();
+    int tEnd = s.indexOf("</Temperatur>");
+    String temperatur = s.substring(num, tEnd);
+    Serial.print("Temperatur: ");
+    wasserTemp = temperatur.toInt();
+    Serial.println(wasserTemp);
   }
   else {
   }
@@ -260,6 +321,9 @@ bool isAvailable(String s){
   return false;
 }
 
+float tmpLast = 0;
+bool wasserLast = true;
+
 void loop() {
   delay(500);
 
@@ -267,7 +331,6 @@ void loop() {
   Serial.println(host);
 
   // Use WiFiClient class to create TCP connections
-  WiFiClient client;
   setStatus(statusLED.Color(30,30,30));
   const int httpPort = 50007;
   if (!client.connect(host, httpPort)) {
@@ -307,7 +370,7 @@ void loop() {
       if (sendQueue[0] != '\0') {
         cli();
         Serial.println("SENDING:");
-        for(int i = 0; i<sizeof(sendQueue) & sendQueue[i]!='\0'; i++) Serial.print(sendQueue[i]); Serial.println();
+        for(int i = 0; i<sizeof(sendQueue) & sendQueue[i]!='\0'; i++) Serial.print(sendQueue[i]);
         String request = "";
         for (int i = 0; i < sizeof(sendQueue); i++) {
           if (sendQueue[i] != '\0') request += sendQueue[i];
@@ -327,7 +390,7 @@ void loop() {
         break;
       }
       
-      if(millis()-keepAlive >= 2000 && client.connected()){
+      if(millis()-keepAlive >= 500 && client.connected()){
         cli();
         delayMicroseconds(10000);
         enqueue("SendStatus\n\0");
@@ -337,8 +400,22 @@ void loop() {
       }
       
       setStatus(statusLED.Color(0,30,0));
-      convergeLED(0, rVal, gVal, bVal, 0, false, 4, 2);
-      for(int i = 0; i<NUMLED; i++) strip.setPixelColor(i,strip.Color(gammatable[(uint8_t)r],gammatable[(uint8_t)g],gammatable[(uint8_t)b]));
+      float tmp = (float)wasserTemp;
+      tmp /= 255.0f;
+      tmp *= NUMLED;
+      if((int)tmpLast != (int)tmp | wasserLast != wasserStatus){
+        for(int i = 0; i<NUMLED; i++){
+            if(i<(int)tmp){ setPixelSollWert(i, ledWarm); }
+            else if(!wasserStatus & i>=(int)tmp) { setPixelSollWert(i, ledKalt); }
+            else { setPixelSollWert(i, ledKalt); }
+        }
+        blurPattern(rVal, gVal, bVal, 1);
+        tmpLast = tmp;
+      }
+      for(int i =0; i<NUMLED; i++){
+          convergeLED(i, rVal[i], gVal[i], bVal[i], 0, false, 2, 1);
+          strip.setPixelColor(i,strip.Color(gammatable[(uint8_t)r[i]],gammatable[(uint8_t)g[i]],gammatable[(uint8_t)b[i]]));
+      }
       strip.show();
       delay(20);
       
@@ -348,9 +425,10 @@ void loop() {
     while (client.available()) {
       setStatus(statusLED.Color(30,0,0));
       timeout = millis();
-      Serial.println("receiving Response");
+      //Serial.println("receiving Response");
       String line = client.readStringUntil('\n');
-      Serial.println("Contents: \n---------->");
+      //Serial.println(line);
+      Serial.println("Message: \n---------->");
       processReply(line);
       Serial.println("<----------\n");
     }
