@@ -3,15 +3,15 @@ package clientThread;
 import java.net.*;
 import java.util.Iterator;
 import java.io.*;
+import server.Server;
 
 public class ClientThread implements Runnable {
 
 	private Thread t;
 	private Socket client;
+	private Server parent;
 	private StringBuilder outBuilder;
 	private Integer index;
-	private boolean waterstatus = false;
-	private int wasserTemp = 0;
 	private boolean isDead;
 	private int portNumber = 50007;
 	private int totalMsgs = 0;
@@ -24,27 +24,13 @@ public class ClientThread implements Runnable {
 		}
 	}
 	
-	public ClientThread(Socket clientSocket, Integer ind){
+	public ClientThread(Socket clientSocket, Server server, Integer ind){
 		super();
 		this.client = clientSocket;
 		this.index = ind;
 		this.isDead = false;
+		this.parent = server;
 		
-		
-		Thread checkForDead = new Thread(new Runnable(){
-			public void run(){
-				while(!isDead){
-					if(waterstatus){
-						if(wasserTemp < 255) wasserTemp++;
-					}else if(wasserTemp > 0){
-						wasserTemp--;
-					}
-					WAIT(250);
-				}
-			}
-		});
-		
-		checkForDead.start();
 		
 	}
 	
@@ -59,13 +45,13 @@ public class ClientThread implements Runnable {
 		outBuilder.append(totalMsgs);
 		outBuilder.append(" Messages");
 		outBuilder.append(" Wasser:");
-		if(waterstatus){
+		if(parent.isWaterstatus()){
 			outBuilder.append("An");
 		}else{
 			outBuilder.append("Aus");
 		}
 		outBuilder.append("<Temperatur>");
-		outBuilder.append(Integer.toString(wasserTemp));
+		outBuilder.append(Integer.toString(parent.getWasserTemp()));
 		outBuilder.append("</Temperatur>");
 		return outBuilder.toString();
 	}
@@ -95,7 +81,7 @@ public class ClientThread implements Runnable {
 			    		outputLine = buildStatus();
 			    		System.out.println("Sending Status: " + outputLine);
 			    	}else if(inputLine.equals("TurnOn")){
-			    		waterstatus = !waterstatus;
+			    		parent.setWaterstatus(!parent.isWaterstatus());
 			    		outputLine = buildStatus();
 			    		System.out.println("Sending Status: " + outputLine);
 			    	}

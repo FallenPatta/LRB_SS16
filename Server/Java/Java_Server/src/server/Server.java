@@ -11,13 +11,41 @@ import clientThread.ClientThread;
 public class Server implements Runnable {
 	Thread t;
 	StringBuilder outBuilder;
+	private boolean waterstatus = false;
+	private int wasserTemp = 0;
 	
 	public CopyOnWriteArrayList<ClientThread> clients;
 	
 	public Server(){
 		clients = new CopyOnWriteArrayList<ClientThread>();
+		
+		Thread updateWater = new Thread(new Runnable(){
+			public void run(){
+				while(true){
+					if(waterstatus){
+						if(wasserTemp < 255) wasserTemp++;
+					}else if(wasserTemp > 0){
+						wasserTemp--;
+					}
+					WAIT(250);
+				}
+			}
+		});
+		updateWater.start();
 	}
 	
+	public boolean isWaterstatus() {
+		return waterstatus;
+	}
+
+	public void setWaterstatus(boolean waterstatus) {
+		this.waterstatus = waterstatus;
+	}
+
+	public int getWasserTemp() {
+		return wasserTemp;
+	}
+
 	private void WAIT(int millis){
 		try{
 			Thread.sleep(millis);
@@ -65,7 +93,7 @@ public class Server implements Runnable {
 			) {
 				System.out.println("Opening Socket Nr.:" + numClients);
 				Socket clientSocket = serverSocket.accept();
-				ClientThread client = new ClientThread(clientSocket, numClients);
+				ClientThread client = new ClientThread(clientSocket, this, numClients);
 				clients.add(client);
 				clients.get(clients.size()-1).start();
 				numClients++;

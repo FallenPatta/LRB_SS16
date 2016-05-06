@@ -152,6 +152,9 @@ void setPixelSollWert(int num, uint32_t c){
 void stripSetup() {
 
   strip.begin();
+
+  strip.show();
+  
   statusLED.begin();
   setStatus(0);
 
