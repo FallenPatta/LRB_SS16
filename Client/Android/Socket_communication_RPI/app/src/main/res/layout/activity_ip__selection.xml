@@ -79,7 +79,8 @@
         android:id="@+id/status_btn"
         android:layout_alignRight="@+id/start_btn"
         android:layout_alignEnd="@+id/start_btn"
-        android:layout_above="@+id/start_btn" />
+        android:layout_above="@+id/start_btn"
+        android:visibility="invisible" />
 
     <TextView
         android:layout_width="250dp"
@@ -104,9 +105,8 @@
         android:layout_height="wrap_content"
         android:text="Eigene IP"
         android:id="@+id/this_ip_btn"
-        android:layout_alignLeft="@+id/start_btn"
-        android:layout_alignStart="@+id/start_btn"
-        android:layout_above="@+id/start_btn" />
+        android:layout_above="@+id/start_btn"
+        android:layout_centerHorizontal="true" />
 
     <Button
         android:layout_width="fill_parent"
@@ -137,6 +137,7 @@
         android:text="Sir Sendalots Servertest"
         android:id="@+id/sendalot"
         android:layout_above="@+id/status_btn"
-        android:layout_centerHorizontal="true" />
+        android:layout_centerHorizontal="true"
+        android:visibility="invisible" />
 
 </RelativeLayout>

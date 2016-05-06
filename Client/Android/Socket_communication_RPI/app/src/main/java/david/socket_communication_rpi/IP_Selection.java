@@ -127,6 +127,7 @@ public class IP_Selection extends AppCompatActivity {
     private String serverRequest = "OK";
     private IP_Selection mainReference = this;
     private boolean isSending = false;
+    private Thread keepAlive;
 
     public void setIsSending(boolean b) {
         isSending = b;
@@ -171,7 +172,7 @@ public class IP_Selection extends AppCompatActivity {
         }
     }
 
-    private void getSynchronized() {
+    /*private void getSynchronized() {
         while (client1.isRunning() | isSending) {
             synchronized (client1.lock) {
                 try {
@@ -180,7 +181,7 @@ public class IP_Selection extends AppCompatActivity {
                 }
             }
         }
-    }
+    }*/
 
     public void recolor2(int numb) {
         TextView cTV = (TextView) findViewById(R.id.color_indicator);
@@ -244,6 +245,7 @@ public class IP_Selection extends AppCompatActivity {
 
     //Commands must be separated by Space
     public void multiSend(String s) {
+        System.out.println("ISIT?: " + multiSending);
         if (!multiSending) {
             multiSending = true;
             final String str = s;
@@ -255,14 +257,17 @@ public class IP_Selection extends AppCompatActivity {
                 @Override
                 public void run() {
                     while (!(commandArray.size() == 0)) {
-                        getSynchronized();
+                        System.out.println("Getting synched");
+                        client1.getSynchronized();
                         synchronized (client1.lock) {
-                            isSending = true;
-                            if (clientRunning == 1) send(commandArray.get(commandArray.size() - 1));
+                            String sendStr = commandArray.get(commandArray.size() - 1);
+                            commandArray.remove(commandArray.size() - 1);
+                            if (clientRunning == 1) {
+                                send(sendStr);
+                            }
                             else {
                                 client1.lock.notify();
                             }
-                            commandArray.remove(commandArray.size() - 1);
                         }
                     }
                     if (clientRunning == 0) isSending = false;
@@ -277,7 +282,7 @@ public class IP_Selection extends AppCompatActivity {
                 public void run() {
                     String[] commands = str.split(" ");
                     for (int i = 0; i < commands.length; i++) {
-                        commandArray.add(0, commands[i]);
+                        //commandArray.add(0, commands[i]);
                     }
                 }
             }).start();
@@ -380,7 +385,7 @@ public class IP_Selection extends AppCompatActivity {
 
                     @Override
                     public void run() {
-                        getSynchronized();
+                        client1.getSynchronized();
                         if (clientRunning == 0) {
                             if (!validIP(devIP)) {
                                 ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
@@ -425,7 +430,7 @@ public class IP_Selection extends AppCompatActivity {
                 if (clientRunning == 0) {
                     Toast.makeText(context, "Es besteht keine Verbindung.", Toast.LENGTH_SHORT).show();
                 } else {
-                    multiSend("TurnOn SendStatus");
+                    multiSend("TurnOn");
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
                     vib.vibrate(30);
                 }
@@ -531,6 +536,18 @@ public class IP_Selection extends AppCompatActivity {
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client.connect();
+
+        keepAlive = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while(true){
+                    if (clientRunning == 1)multiSend("SendStatus");
+                    WAIT(1000);
+                }
+            }
+        });
+        keepAlive.start();
+
         Action viewAction = Action.newAction(
                 Action.TYPE_VIEW, // TODO: choose an action type.
                 "IP_Selection Page", // TODO: Define a title for the content shown.

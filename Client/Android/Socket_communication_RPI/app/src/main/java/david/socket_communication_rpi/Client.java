@@ -2,6 +2,7 @@ package david.socket_communication_rpi;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.content.SyncStatusObserver;
 import android.graphics.Color;
 import android.graphics.RadialGradient;
 import android.graphics.drawable.Drawable;
@@ -57,12 +58,22 @@ public class Client implements Runnable {
             }
         });
         Tconnect.start();
+        try {
+            Tconnect.join();
+        }catch(InterruptedException e){
+        }
+
     }
 
-    private void getSynchronized() {
+    public boolean connected(){
+        return (!mainSocket.isClosed() & mainSocket.isConnected());
+    }
+
+    public void getSynchronized() {
         while(isRunning()) {
             synchronized (lock) {
                 try {
+                    System.out.println("isrunning is : " + isRunning());
                     lock.wait();
                 } catch (InterruptedException e) {
                 }
@@ -238,32 +249,23 @@ public class Client implements Runnable {
     }
 
     private boolean gotStatus(String s) {
-        String[] contents = s.split(" ");
-        if (contents[0].equals("Status")) {
-            return true;
-        }
+        if(s.contains("<Status>") & s.contains("</Status>")) return true;
         return false;
     }
 
     private String calculateUseroutput(String s) {
         StringBuilder sb = new StringBuilder("");
-        String[] outputs = s.split(" ");
-        boolean statfound = false;
         int statNum = -1;
-        for (int i = 0; i < outputs.length; i++) {
-            String[] msgsearch = outputs[i].split(":");
-            if (msgsearch.length == 2) {
-                if (msgsearch[0].equals("Wasser")) {
-                    statfound = true;
-                    statNum = i;
-                    sb.append(msgsearch[0]);
-                    sb.append(": ");
-                    sb.append(msgsearch[1]);
-                    sb.append(" ");
+        if (s.contains("<Wasser>")) {
+            int begin = s.indexOf("<Wasser>");
+            begin += "<Wasser>".length();
+            int end = s.indexOf("</Wasser>");
+            String wStatus = s.substring(begin, end);
+            sb.append("Wasser: " + wStatus);
 
-                    if (msgsearch[1].equals("An")) {
-                        recolor2(0);
-                        mainActivity.runOnUiThread(new Runnable() {
+            if (wStatus.equals("An")) {
+                recolor2(0);
+                mainActivity.runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
                                 Button stb = (Button)mainActivity.findViewById(R.id.start_btn);
@@ -271,28 +273,24 @@ public class Client implements Runnable {
                             }
                         });
                         //recolor(250, 40, 0);
-                    } else if (msgsearch[1].equals("Aus")) {
-                        recolor2(1);
-                        mainActivity.runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Button stb = (Button) mainActivity.findViewById(R.id.start_btn);
-                                stb.setText("Wasser Anschalten");
-                            }
-                        });
+            } else if (wStatus.equals("Aus")) {
+                recolor2(1);
+                mainActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Button stb = (Button) mainActivity.findViewById(R.id.start_btn);
+                        stb.setText("Wasser Anschalten");
                     }
-
-                }
+                });
             }
         }
-        for (int i = 0; i < outputs.length; i++) {
-            if (i != statNum) {
-                sb.append(outputs[i]);
-                if (outputs[i].equals("Status")) {
-                    sb.append(":");
-                }
-                sb.append(" ");
-            }
+
+        if(s.contains("<Temperatur>")){
+            int begin = s.indexOf("<Temperatur>");
+            begin += "<Temperatur>".length();
+            int end = s.indexOf("</Temperatur>");
+            String tStatus = s.substring(begin, end);
+            sb.append(" - Temperatur: " + tStatus);
         }
 
         return sb.toString();
@@ -302,6 +300,7 @@ public class Client implements Runnable {
     @Override
     public void run() {
         synchronized (lock) {
+            //TODO: Auf Pipeline umstellen, while(inputstream.available()) read inputstream - Behebt hoffentlich notify() Probleme
             try {
                 //PrintWriter out = new PrintWriter(mainSocket.getOutputStream(), true);
                 //BufferedReader in = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
@@ -314,7 +313,7 @@ public class Client implements Runnable {
                     out.println(fromUser);
                 }
                 while ((fromServer = in.readLine()) != null) {
-
+                    System.out.println("SERVERMESSAGE: " + fromServer);
                     if (fromServer.equals("OK")) {
                         stopThread();
                         mainActivity.setIsSending(false);
@@ -324,24 +323,14 @@ public class Client implements Runnable {
                         String toUI = calculateUseroutput(fromServer);
                         //UPoutput(fromServer);
                         UPoutput(toUI);
-                        request = "OK";
-                    } else {
-                        request = "OK";
                     }
 
-                    //recolor();
+                    System.out.println("BEFORE TERMINATE");
 
-                    fromUser = request;
-
-                    if (fromUser != null) {
-                        out.println(fromUser);
-                    } else {
-                        System.out.println("NULL FROM USER");
-                        stopThread();
-                        mainActivity.setIsSending(false);
-                        lock.notify();
-                        return;
-                    }
+                    stopThread();
+                    mainActivity.setIsSending(false);
+                    lock.notify();
+                    return;
                 }
                 if (fromServer == null) {
                     recolor2(2);
@@ -380,6 +369,7 @@ public class Client implements Runnable {
                 connectSocket();
                 run();
                 stopThread();
+                lock.notify();
                 return;
             }
             runThread = false;
