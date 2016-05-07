@@ -77,6 +77,7 @@ public class Client implements Runnable {
 
     public void stopThread() {
         runThread = false;
+        heartBeating = false;
     }
 
     private void connectSocket() {
