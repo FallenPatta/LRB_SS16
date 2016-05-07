@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.SyncStatusObserver;
 import android.graphics.Color;
 import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.Ringtone;
@@ -19,11 +20,19 @@ import android.widget.Toast;
 import java.net.*;
 import java.lang.*;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Client implements Runnable {
     Thread t;
+    Thread heartbeat;
+    private boolean heartBeating = false;
+    private boolean islocked = false;
+    private int wasserStatus;
     private int portNumber = 50007;
     private String hostName = "127.0.0.1";
     private String request = "OK";
@@ -35,13 +44,12 @@ public class Client implements Runnable {
     private Socket mainSocket;
     private PrintWriter outWriter;
     private BufferedReader inReader;
-    private int [] colors = {0,0,0,0,0,0,0,0,0};
+    private List<String> commandArray = Collections.synchronizedList(new ArrayList<String>());
     public Object lock = new Object();
     public final Lock mutex = new ReentrantLock(true);
 
     //public Client(String host, int pNum, TextView lm, String req, TextView infoView, IP_Selection mainAct) {
     public Client(String host, int pNum, TextView lm, String req, IP_Selection mainAct, TextView indicator) {
-        colors = new int[]{0,0,0,0,0,0,0,0,0};
         hostName = host;
         portNumber = pNum;
         latestMessage = lm;
@@ -49,6 +57,7 @@ public class Client implements Runnable {
         //screenInfo = infoView;
         setRequest(req);
         mainActivity = mainAct;
+        wasserStatus = 0;
         Thread Tconnect = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -58,27 +67,10 @@ public class Client implements Runnable {
             }
         });
         Tconnect.start();
-        try {
-            Tconnect.join();
-        }catch(InterruptedException e){
-        }
-
     }
 
     public boolean connected(){
         return (!mainSocket.isClosed() & mainSocket.isConnected());
-    }
-
-    public void getSynchronized() {
-        while(isRunning()) {
-            synchronized (lock) {
-                try {
-                    System.out.println("isrunning is : " + isRunning());
-                    lock.wait();
-                } catch (InterruptedException e) {
-                }
-            }
-        }
     }
 
     public void stopThread() {
@@ -86,75 +78,54 @@ public class Client implements Runnable {
     }
 
     private void connectSocket() {
-        boolean connecting = true;
-
-        getSynchronized();
-
         runThread = true;
 
-        synchronized (lock) {
-            while (connecting) {
-                try {
-                    mainSocket = new Socket(hostName, portNumber);
-                    outWriter = new PrintWriter(mainSocket.getOutputStream(), true);
-                    inReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
-                    String fromServer;
-                    mainSocket.setSoTimeout(3000);
-                    while ((fromServer = inReader.readLine()) != null & connecting) {
-                        if (fromServer != null) {
-                            //UPoutput(fromServer);
-                        }
+        try {
+            mainSocket = new Socket(hostName, portNumber);
+            outWriter = new PrintWriter(mainSocket.getOutputStream(), true);
+            inReader = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
+            String fromServer;
+            mainSocket.setSoTimeout(5000);
+        } catch (UnknownHostException e) {
+            System.out.println("Unknown host: " + hostName);
+            UPoutput("Could not reach host");
+            mainActivity.setClientRunning(0);
+            stopThread();
+            return;
+        } catch (IOException e) {
+            System.out.println("No I/O");
+            UPoutput("Connection broke");
+            mainActivity.setClientRunning(0);
+            stopThread();
+            return;
+        }
+
+        start();
+
+        heartbeat = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if(!heartBeating) {
+                    heartBeating = true;
+                    while (isRunning()) {
+                        if(commandArray.size() == 0) appendMessage("SendStatus", false);
                         WAIT(250);
-                        outWriter.println("OK");
-
-                        while ((fromServer = inReader.readLine()) != null) {
-                            if (fromServer.equals("connected")) {
-                            } else if (fromServer.equals("OK")) {
-
-                                mainActivity.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        indication.setBackgroundColor(Color.argb(255, 0, 255, 80));
-                                        recolor2(3);
-                                    }
-                                });
-                                connecting = false;
-                                mainActivity.setClientRunning(1);
-
-                                stopThread();
-                                lock.notify();
-                                return;
-                            }
-                        }
                     }
-                    System.out.println("CONNECTED");
-                    if (fromServer == null) {
-                        mainActivity.setClientRunning(0);
-                        mainSocket.close();
-                        stopThread();
-                        lock.notify();
-                        return;
-                    }
-                } catch (UnknownHostException e) {
-                    System.out.println("Unknown host: " + hostName);
-                    //UPinfo("Could not reach...");
-                    mainActivity.setClientRunning(0);
-                    stopThread();
-                    lock.notify();
-                    return;
-
-                } catch (IOException e) {
-                    System.out.println("No I/O");
-                    //UPinfo("Input/Output-Error");
-                    mainActivity.setClientRunning(0);
-                    stopThread();
-                    lock.notify();
-                    return;
                 }
             }
-        }
-        System.out.println("ENDING");
+        });
+        heartbeat.start();
 
+        System.out.println("ENDING");
+    }
+
+    public void appendMessage(String s, boolean front){
+        if(front){
+            this.commandArray.add(0, s);
+            t.interrupt();
+            return;
+        }
+        this.commandArray.add(s);
     }
 
     public void setRequest(String req) {
@@ -183,7 +154,7 @@ public class Client implements Runnable {
         });
     }
 
-    private void WAIT(int millis) {
+    private void WAIT(long millis) {
         try {
             Thread.sleep(millis);
         } catch (Exception e) {
@@ -209,31 +180,54 @@ public class Client implements Runnable {
         return true;
     }
 
-    private void recolor2(int numb) {
+    private int[] overlayColors(int colors1[], int colors2[], double norm){
+
+        int color[] = {
+                Color.argb(0xff, (int)(Color.red(colors2[0]) * norm + Color.red(colors1[0]) * (1-norm)), (int)(Color.green(colors2[0]) * norm + Color.green(colors1[0]) * (1-norm)), (int)(Color.blue(colors2[0]) * norm + Color.blue(colors1[0]) * (1-norm)))
+                ,   Color.argb(0xff, (int)(Color.red(colors2[1]) * norm + Color.red(colors1[1]) * (1-norm)), (int)(Color.green(colors2[1]) * norm + Color.green(colors1[1]) * (1-norm)), (int)(Color.blue(colors2[1]) * norm + Color.blue(colors1[1]) * (1-norm)))
+                ,   Color.argb(0xff, (int)(Color.red(colors2[2]) * norm + Color.red(colors1[2]) * (1-norm)), (int)(Color.green(colors2[2]) * norm + Color.green(colors1[2]) * (1-norm)), (int)(Color.blue(colors2[2]) * norm + Color.blue(colors1[2]) * (1-norm)))
+        };
+
+        return color;
+    }
+
+    private void recolor2(int temp) {
         final IP_Selection here = mainActivity;
         final TextView there = indication;
-        final int num = numb;
+        final int temperatur = temp;
+        //int[] colors2 = {Color.parseColor("#FF800000"),Color.parseColor("#FFFF0000"), Color.parseColor("#FFFFAF00")};
+        //int[] colors1 = {Color.parseColor("#FF000050"),Color.parseColor("#FF168CAF"), Color.parseColor("#FFFFFFFF")};
+
+        //create a new gradient color
+        final GradientDrawable rg = new GradientDrawable();
+
+        rg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+
         here.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                there.setBackgroundResource(R.drawable.gradienten);
-                there.getBackground().setLevel(num);
+                while (wasserStatus != temperatur) {
+                    wasserStatus = temperatur;
+                    double norm = (double) wasserStatus / 255.0;
+                    int[] colors2 = {Color.parseColor("#FF800000"),Color.parseColor("#FFFF0000"), Color.parseColor("#FFFFAF00")};
+                    int[] colors1 = {Color.parseColor("#FF000050"),Color.parseColor("#FF168CAF"), Color.parseColor("#FFFFFFFF")};
+
+                    /*int color[] = {
+                                Color.argb(0xff, (int)(Color.red(colors2[0]) * norm + Color.red(colors1[0]) * (1-norm)), (int)(Color.green(colors2[0]) * norm + Color.green(colors1[0]) * (1-norm)), (int)(Color.blue(colors2[0]) * norm + Color.blue(colors1[0]) * (1-norm)))
+                            ,   Color.argb(0xff, (int)(Color.red(colors2[1]) * norm + Color.red(colors1[1]) * (1-norm)), (int)(Color.green(colors2[1]) * norm + Color.green(colors1[1]) * (1-norm)), (int)(Color.blue(colors2[1]) * norm + Color.blue(colors1[1]) * (1-norm)))
+                            ,   Color.argb(0xff, (int)(Color.red(colors2[2]) * norm + Color.red(colors1[2]) * (1-norm)), (int)(Color.green(colors2[2]) * norm + Color.green(colors1[2]) * (1-norm)), (int)(Color.blue(colors2[2]) * norm + Color.blue(colors1[2]) * (1-norm)))
+                    };*/
+                    int color[] = overlayColors(colors1, colors2, norm);
+
+                    rg.setColors(color);
+                    rg.setGradientRadius(440);
+                    rg.setGradientCenter(0.5f, 1.0f);
+                    there.setBackground(rg);
+                    WAIT(10);
+                }
             }
         });
     }
-
-//    private void UPinfo(String s) {
-//        try {
-//            final String inUI = s;
-//            mainActivity.runOnUiThread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    screenInfo.setText(inUI);
-//                }
-//            });
-//        } catch (Exception e) {
-//        }
-//    }
 
     private void ToastMessage(String s) {
         try {
@@ -253,6 +247,17 @@ public class Client implements Runnable {
         return false;
     }
 
+    private String getStatus(String s){
+
+        if(gotStatus(s)){
+            int start = s.indexOf("<Status>");
+            int end = s.indexOf("</Status>");
+            return s.substring(start+"<Status>".length(), end);
+        }
+
+        return null;
+    }
+
     private String calculateUseroutput(String s) {
         StringBuilder sb = new StringBuilder("");
         int statNum = -1;
@@ -264,7 +269,7 @@ public class Client implements Runnable {
             sb.append("Wasser: " + wStatus);
 
             if (wStatus.equals("An")) {
-                recolor2(0);
+                //recolor2(0);
                 mainActivity.runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
@@ -274,7 +279,7 @@ public class Client implements Runnable {
                         });
                         //recolor(250, 40, 0);
             } else if (wStatus.equals("Aus")) {
-                recolor2(1);
+                //recolor2(1);
                 mainActivity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -291,95 +296,125 @@ public class Client implements Runnable {
             int end = s.indexOf("</Temperatur>");
             String tStatus = s.substring(begin, end);
             sb.append(" - Temperatur: " + tStatus);
+            System.out.println("TSTAT: " + tStatus);
+            try{
+                int temp = Integer.parseInt(tStatus);
+                recolor2(temp);
+            } catch (NumberFormatException e){
+            }
         }
 
         return sb.toString();
     }
 
+    private void timeoutThread(){
+        if (false) {
+            recolor2(2);
+            try {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        WAIT(200);
+                        for(int i = 0; i < 2; i++){
+                            Vibrator vib = (Vibrator) mainActivity.getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
+                            vib.vibrate(200);
+                            WAIT(300);
+                        }
+                    }
+                }).start();
+                ToastMessage("Verbindung abgebrochen");
+                Uri not2 = RingtoneManager.getActualDefaultRingtoneUri(mainActivity.getApplicationContext(), RingtoneManager.TYPE_NOTIFICATION);
+                Ringtone r = RingtoneManager.getRingtone(mainActivity.getApplicationContext(), not2);
+                r.play();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            mainActivity.setClientRunning(0);
+            stopThread();
+            mainActivity.setIsSending(false);
+            return;
+        }
+    }
+
+    public void testConnection(){
+        commandArray = Collections.synchronizedList(new ArrayList<String>());
+        WAIT(50);
+        outWriter.println("OK");
+        String test = null;
+        try {
+            if ((test = inReader.readLine()) != null) {
+            }else{
+                stopThread();
+                mainActivity.setClientRunning(0);
+                mainActivity.setIsSending(false);
+                return;
+            }
+        }catch (IOException e){
+            stopThread();
+            mainActivity.setClientRunning(0);
+            mainActivity.setIsSending(false);
+            return;
+        }
+    }
+
     @TargetApi(Build.VERSION_CODES.KITKAT)
     @Override
     public void run() {
-        synchronized (lock) {
-            //TODO: Auf Pipeline umstellen, while(inputstream.available()) read inputstream - Behebt hoffentlich notify() Probleme
-            try {
-                //PrintWriter out = new PrintWriter(mainSocket.getOutputStream(), true);
-                //BufferedReader in = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
-                PrintWriter out = outWriter;
-                BufferedReader in = inReader;
-                String fromServer;
-                String fromUser = request;
-                if (fromUser != null) {
-                    System.out.println("USERMESSAGE: " + fromUser);
-                    out.println(fromUser);
-                }
-                while ((fromServer = in.readLine()) != null) {
-                    System.out.println("SERVERMESSAGE: " + fromServer);
-                    if (fromServer.equals("OK")) {
-                        stopThread();
-                        mainActivity.setIsSending(false);
-                        lock.notify();
-                        return;
-                    } else if (gotStatus(fromServer)) {
-                        String toUI = calculateUseroutput(fromServer);
-                        //UPoutput(fromServer);
-                        UPoutput(toUI);
-                    }
+        System.out.println("STARTING: " + isRunning());
+        //TODO: Auf Pipeline umstellen, while(inputstream.available()) read inputstream - Behebt hoffentlich notify() Probleme
+        //PrintWriter out = new PrintWriter(mainSocket.getOutputStream(), true);
+        //BufferedReader in = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
+        PrintWriter out = outWriter;
 
-                    System.out.println("BEFORE TERMINATE");
-
-                    stopThread();
-                    mainActivity.setIsSending(false);
-                    lock.notify();
-                    return;
-                }
-                if (fromServer == null) {
-                    recolor2(2);
-                    try {
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run() {
-                                WAIT(200);
-                                for(int i = 0; i < 2; i++){
-                                    Vibrator vib = (Vibrator) mainActivity.getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
-                                    vib.vibrate(200);
-                                    WAIT(300);
-                                }
-                            }
-                        }).start();
-                        ToastMessage("Verbindung abgebrochen");
-                        Uri not2 = RingtoneManager.getActualDefaultRingtoneUri(mainActivity.getApplicationContext(), RingtoneManager.TYPE_NOTIFICATION);
-                        Ringtone r = RingtoneManager.getRingtone(mainActivity.getApplicationContext(), not2);
-                        r.play();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    mainActivity.setClientRunning(0);
-                    stopThread();
-                    mainActivity.setIsSending(false);
-                    lock.notify();
-                    return;
-                }
-                System.out.println("SOMETHING WENT WRONG");
-            } catch (IOException e) {
-                System.out.println("No I/O");
-                try {
-                    mainSocket.close();
-                } catch (IOException f) {
-                }
-                connectSocket();
-                run();
-                stopThread();
-                lock.notify();
-                return;
-            }
-            runThread = false;
-            mainActivity.setIsSending(false);
-            lock.notify();
+        Scanner inScanner = null;
+        try{
+        inScanner = new Scanner(mainSocket.getInputStream());
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+            return;
         }
+
+        String fromServer = "";
+        String fromUser = "";
+
+        while (isRunning()) {
+
+            try {
+                while (mainSocket.getInputStream().available() > 0) {
+                    fromServer += inScanner.next();
+                }
+            } catch (IOException e) {
+            System.out.println(e.getMessage());
+            return;
+            }
+
+            if (!fromServer.isEmpty()) {
+                String singleMessage = getStatus(fromServer);
+                if (singleMessage != null) {
+                    String toUI = calculateUseroutput(singleMessage);
+                    UPoutput(toUI);
+                    fromServer = fromServer.substring(fromServer.indexOf("</Status>") + "</Status>".length());
+                }
+                else if (fromServer.contains("\n")){
+                    fromServer = "";
+                }
+            }
+
+            while (commandArray.size() > 0) {
+                System.out.println(commandArray.size());
+                fromUser = commandArray.get(0);
+                commandArray.remove(0);
+                System.out.println("USERMESSAGE: " + fromUser);
+                out.println(fromUser);
+            }
+            WAIT(100);
+        }
+        mainActivity.setIsSending(false);
     }
 
     public void start() {
         runThread = true;
+        mainActivity.setClientRunning(1);
         t = new Thread(this);
         t.start();
     }

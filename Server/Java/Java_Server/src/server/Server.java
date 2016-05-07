@@ -27,7 +27,7 @@ public class Server implements Runnable {
 					}else if(wasserTemp > 0){
 						wasserTemp--;
 					}
-					WAIT(250);
+					WAIT(100);
 				}
 			}
 		});

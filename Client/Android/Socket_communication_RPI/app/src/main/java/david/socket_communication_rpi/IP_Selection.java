@@ -127,7 +127,6 @@ public class IP_Selection extends AppCompatActivity {
     private String serverRequest = "OK";
     private IP_Selection mainReference = this;
     private boolean isSending = false;
-    private Thread keepAlive;
 
     public void setIsSending(boolean b) {
         isSending = b;
@@ -223,70 +222,19 @@ public class IP_Selection extends AppCompatActivity {
         }
     }
 
-    public void send(String s) {
-        final String str = s;
+    //Commands must be separated by Space
+    public void multiSend(String s, boolean front) {
+            final String str = s;
+            final String[] commands = str.split(" ");
+            final boolean fr = front;
         new Thread(new Runnable() {
             @Override
             public void run() {
-                synchronized (client1.lock) {
-                    isSending = true;
-                    serverRequest = str;
-                    client1.setRequest(serverRequest);
-                    System.out.println("Request: " + client1.getRequest());
-                    client1.start();
+                for (int i = 0; i < commands.length; i++) {
+                    client1.appendMessage(commands[i], fr);
                 }
             }
         }).start();
-        //sending.start();
-    }
-
-    private boolean multiSending = false;
-    private List<String> commandArray = Collections.synchronizedList(new ArrayList<String>());
-
-    //Commands must be separated by Space
-    public void multiSend(String s) {
-        System.out.println("ISIT?: " + multiSending);
-        if (!multiSending) {
-            multiSending = true;
-            final String str = s;
-            final String[] commands = str.split(" ");
-            for (int i = 0; i < commands.length; i++) {
-                commandArray.add(0, commands[i]);
-            }
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    while (!(commandArray.size() == 0)) {
-                        System.out.println("Getting synched");
-                        client1.getSynchronized();
-                        synchronized (client1.lock) {
-                            String sendStr = commandArray.get(commandArray.size() - 1);
-                            commandArray.remove(commandArray.size() - 1);
-                            if (clientRunning == 1) {
-                                send(sendStr);
-                            }
-                            else {
-                                client1.lock.notify();
-                            }
-                        }
-                    }
-                    if (clientRunning == 0) isSending = false;
-                    multiSending = false;
-                }
-            }).start();
-            //sending.start();
-        } else {
-            final String str = s;
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    String[] commands = str.split(" ");
-                    for (int i = 0; i < commands.length; i++) {
-                        //commandArray.add(0, commands[i]);
-                    }
-                }
-            }).start();
-        }
     }
 
     @Override
@@ -323,16 +271,6 @@ public class IP_Selection extends AppCompatActivity {
         if (validIP(savedIP)) {
             ipField.setText(savedIP);
             client1 = new Client(savedIP, 50007, updateText, serverRequest, mainReference, colorInd);
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    WAIT(100);
-                    while(client1.isRunning()){
-                        WAIT(100);
-                    }
-                    multiSend("SendStatus");
-                }
-            }).start();
         }
 
         colorInd.setOnClickListener(new View.OnClickListener() {
@@ -385,7 +323,6 @@ public class IP_Selection extends AppCompatActivity {
 
                     @Override
                     public void run() {
-                        client1.getSynchronized();
                         if (clientRunning == 0) {
                             if (!validIP(devIP)) {
                                 ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
@@ -397,8 +334,8 @@ public class IP_Selection extends AppCompatActivity {
                             }
                         } else {
                             ToastMessage("Verbindung wird geprüft.");
-                            multiSend("OK");
-                            mainReference.WAIT(50);
+                            multiSend("OK", false);
+                            mainReference.WAIT(100);
                             if (clientRunning == 1) {
                                 ToastMessage("Es besteht bereits eine Verbindung. Wenn diese nicht nutzbar scheint hilft wahrscheinlich ein Neustart.");
                             } else {
@@ -430,7 +367,7 @@ public class IP_Selection extends AppCompatActivity {
                 if (clientRunning == 0) {
                     Toast.makeText(context, "Es besteht keine Verbindung.", Toast.LENGTH_SHORT).show();
                 } else {
-                    multiSend("TurnOn");
+                    multiSend("TurnOn SendStatus", true);
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
                     vib.vibrate(30);
                 }
@@ -499,7 +436,7 @@ public class IP_Selection extends AppCompatActivity {
                     Toast.makeText(context, "Nicht verbunden.", Toast.LENGTH_SHORT).show();
                 } else if (client1.isRunning()) {
                 } else {
-                    multiSend("SendStatus");
+                    multiSend("SendStatus", false);
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
                     vib.vibrate(30);
                 }
@@ -517,7 +454,7 @@ public class IP_Selection extends AppCompatActivity {
                     new Thread(new Runnable() {
                         @Override
                         public void run() {
-                            for (int i = 0; i<1000; i++)multiSend("SendStatus");
+                            for (int i = 0; i<1000; i++)multiSend("SendStatus", false);
                         }
                     }).start();
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
@@ -536,17 +473,6 @@ public class IP_Selection extends AppCompatActivity {
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client.connect();
-
-        keepAlive = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while(true){
-                    if (clientRunning == 1)multiSend("SendStatus");
-                    WAIT(1000);
-                }
-            }
-        });
-        keepAlive.start();
 
         Action viewAction = Action.newAction(
                 Action.TYPE_VIEW, // TODO: choose an action type.
