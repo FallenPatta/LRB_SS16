@@ -23,7 +23,7 @@ const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 const char* ssid     = "GladOS-Net";
 const char* password = "thecakeisalie";
 
-const char* host = "192.168.0.51";
+const char* host = "192.168.0.50";
 
 long lastSend = 0;
 long keepAlive = 0;
@@ -34,11 +34,9 @@ bool wasserStatus = false;
 
 volatile char sendQueue[256];
 
-IPAddress ip(192, 168, 0, 50);
+IPAddress ip(192, 168, 0, 69);
 IPAddress gate(192, 168, 0, 1);
 IPAddress net(255, 255, 255, 0);
-
-WiFiClient client;
 
 #define NUMLED  24
 
@@ -104,7 +102,6 @@ boolean convergeLED(int num, double toR, double toG, double toB, int wait, boole
   if(abs(toB - b[num]) > thres & toB - b[num] > 0){ b[num] += fb; diverging = true;}
   if(abs(toB - b[num]) > thres & toB - b[num] < 0){ b[num] -= fb; diverging = true;}
   
-  if(diverging)delay(wait);
   return diverging;
 }
 
@@ -332,6 +329,8 @@ void loop() {
 
   Serial.print("connecting to ");
   Serial.println(host);
+
+  WiFiClient client;
 
   // Use WiFiClient class to create TCP connections
   setStatus(statusLED.Color(30,30,30));

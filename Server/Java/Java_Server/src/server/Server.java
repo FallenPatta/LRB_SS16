@@ -94,8 +94,8 @@ public class Server implements Runnable {
 				System.out.println("Opening Socket Nr.:" + numClients);
 				Socket clientSocket = serverSocket.accept();
 				ClientThread client = new ClientThread(clientSocket, this, numClients);
-				clients.add(client);
-				clients.get(clients.size()-1).start();
+				clients.add(0,client);
+				clients.get(0).start();
 				numClients++;
 				
 			}catch(Exception e){

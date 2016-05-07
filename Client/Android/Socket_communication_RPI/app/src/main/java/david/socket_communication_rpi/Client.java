@@ -30,8 +30,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Client implements Runnable {
     Thread t;
     Thread heartbeat;
+    Thread watchdog;
     private boolean heartBeating = false;
-    private boolean islocked = false;
+    private long avail;
     private int wasserStatus;
     private int portNumber = 50007;
     private String hostName = "127.0.0.1";
@@ -58,6 +59,7 @@ public class Client implements Runnable {
         setRequest(req);
         mainActivity = mainAct;
         wasserStatus = 0;
+        avail = 0;
         Thread Tconnect = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -79,6 +81,7 @@ public class Client implements Runnable {
 
     private void connectSocket() {
         runThread = true;
+        mainActivity.setClientRunning(1);
 
         try {
             mainSocket = new Socket(hostName, portNumber);
@@ -116,13 +119,20 @@ public class Client implements Runnable {
         });
         heartbeat.start();
 
+        watchdog = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                timeoutThread();
+            }
+        });
+        watchdog.start();
+
         System.out.println("ENDING");
     }
 
     public void appendMessage(String s, boolean front){
         if(front){
             this.commandArray.add(0, s);
-            t.interrupt();
             return;
         }
         this.commandArray.add(s);
@@ -206,26 +216,18 @@ public class Client implements Runnable {
         here.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                while (wasserStatus != temperatur) {
-                    wasserStatus = temperatur;
                     double norm = (double) wasserStatus / 255.0;
                     int[] colors2 = {Color.parseColor("#FF800000"),Color.parseColor("#FFFF0000"), Color.parseColor("#FFFFAF00")};
                     int[] colors1 = {Color.parseColor("#FF000050"),Color.parseColor("#FF168CAF"), Color.parseColor("#FFFFFFFF")};
 
-                    /*int color[] = {
-                                Color.argb(0xff, (int)(Color.red(colors2[0]) * norm + Color.red(colors1[0]) * (1-norm)), (int)(Color.green(colors2[0]) * norm + Color.green(colors1[0]) * (1-norm)), (int)(Color.blue(colors2[0]) * norm + Color.blue(colors1[0]) * (1-norm)))
-                            ,   Color.argb(0xff, (int)(Color.red(colors2[1]) * norm + Color.red(colors1[1]) * (1-norm)), (int)(Color.green(colors2[1]) * norm + Color.green(colors1[1]) * (1-norm)), (int)(Color.blue(colors2[1]) * norm + Color.blue(colors1[1]) * (1-norm)))
-                            ,   Color.argb(0xff, (int)(Color.red(colors2[2]) * norm + Color.red(colors1[2]) * (1-norm)), (int)(Color.green(colors2[2]) * norm + Color.green(colors1[2]) * (1-norm)), (int)(Color.blue(colors2[2]) * norm + Color.blue(colors1[2]) * (1-norm)))
-                    };*/
                     int color[] = overlayColors(colors1, colors2, norm);
 
                     rg.setColors(color);
-                    rg.setGradientRadius(440);
+                    rg.setGradientRadius(550);
                     rg.setGradientCenter(0.5f, 1.0f);
                     there.setBackground(rg);
                     WAIT(10);
                 }
-            }
         });
     }
 
@@ -268,7 +270,7 @@ public class Client implements Runnable {
             String wStatus = s.substring(begin, end);
             sb.append("Wasser: " + wStatus);
 
-            if (wStatus.equals("An")) {
+            /*if (wStatus.equals("An")) {
                 //recolor2(0);
                 mainActivity.runOnUiThread(new Runnable() {
                             @Override
@@ -287,7 +289,7 @@ public class Client implements Runnable {
                         stb.setText("Wasser Anschalten");
                     }
                 });
-            }
+            }*/
         }
 
         if(s.contains("<Temperatur>")){
@@ -295,10 +297,15 @@ public class Client implements Runnable {
             begin += "<Temperatur>".length();
             int end = s.indexOf("</Temperatur>");
             String tStatus = s.substring(begin, end);
-            sb.append(" - Temperatur: " + tStatus);
+            sb.append(" - Temperatur: ");
             System.out.println("TSTAT: " + tStatus);
             try{
                 int temp = Integer.parseInt(tStatus);
+                wasserStatus = temp;
+                if(wasserStatus < 100) sb.append("Kalt");
+                if(wasserStatus >= 100 & wasserStatus < 200) sb.append("Warm");
+                if(wasserStatus >= 200 & wasserStatus <= 255) sb.append("Heiß");
+
                 recolor2(temp);
             } catch (NumberFormatException e){
             }
@@ -307,53 +314,40 @@ public class Client implements Runnable {
         return sb.toString();
     }
 
-    private void timeoutThread(){
-        if (false) {
-            recolor2(2);
-            try {
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        WAIT(200);
-                        for(int i = 0; i < 2; i++){
-                            Vibrator vib = (Vibrator) mainActivity.getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
-                            vib.vibrate(200);
-                            WAIT(300);
+    private void timeoutThread() {
+        while (isRunning()) {
+            WAIT(5000);
+            if (avail == 0) {
+                recolor2(2);
+                try {
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            WAIT(200);
+                            for (int i = 0; i < 2; i++) {
+                                Vibrator vib = (Vibrator) mainActivity.getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
+                                vib.vibrate(200);
+                                WAIT(300);
+                            }
                         }
-                    }
-                }).start();
-                ToastMessage("Verbindung abgebrochen");
-                Uri not2 = RingtoneManager.getActualDefaultRingtoneUri(mainActivity.getApplicationContext(), RingtoneManager.TYPE_NOTIFICATION);
-                Ringtone r = RingtoneManager.getRingtone(mainActivity.getApplicationContext(), not2);
-                r.play();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            mainActivity.setClientRunning(0);
-            stopThread();
-            mainActivity.setIsSending(false);
-            return;
-        }
-    }
-
-    public void testConnection(){
-        commandArray = Collections.synchronizedList(new ArrayList<String>());
-        WAIT(50);
-        outWriter.println("OK");
-        String test = null;
-        try {
-            if ((test = inReader.readLine()) != null) {
-            }else{
-                stopThread();
+                    }).start();
+                    ToastMessage("Verbindung abgebrochen\nNeustartversuch");
+                    Uri not2 = RingtoneManager.getActualDefaultRingtoneUri(mainActivity.getApplicationContext(), RingtoneManager.TYPE_NOTIFICATION);
+                    Ringtone r = RingtoneManager.getRingtone(mainActivity.getApplicationContext(), not2);
+                    r.play();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
                 mainActivity.setClientRunning(0);
-                mainActivity.setIsSending(false);
+                stopThread();
+                try {
+                    t.join();
+                    heartbeat.join();
+                }catch(InterruptedException e){
+                }
+                connectSocket();
                 return;
-            }
-        }catch (IOException e){
-            stopThread();
-            mainActivity.setClientRunning(0);
-            mainActivity.setIsSending(false);
-            return;
+            } else avail = 0;
         }
     }
 
@@ -380,6 +374,7 @@ public class Client implements Runnable {
         while (isRunning()) {
 
             try {
+                if(mainSocket.getInputStream().available()>0) avail+=mainSocket.getInputStream().available();
                 while (mainSocket.getInputStream().available() > 0) {
                     fromServer += inScanner.next();
                 }
@@ -407,9 +402,8 @@ public class Client implements Runnable {
                 System.out.println("USERMESSAGE: " + fromUser);
                 out.println(fromUser);
             }
-            WAIT(100);
+            WAIT(20);
         }
-        mainActivity.setIsSending(false);
     }
 
     public void start() {

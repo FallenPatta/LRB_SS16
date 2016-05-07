@@ -126,11 +126,6 @@ public class IP_Selection extends AppCompatActivity {
     private int clientRunning = 0;
     private String serverRequest = "OK";
     private IP_Selection mainReference = this;
-    private boolean isSending = false;
-
-    public void setIsSending(boolean b) {
-        isSending = b;
-    }
 
     public void setClientRunning(int val) {
         clientRunning = val;
@@ -366,6 +361,37 @@ public class IP_Selection extends AppCompatActivity {
             public void onClick(View v) {
                 if (clientRunning == 0) {
                     Toast.makeText(context, "Es besteht keine Verbindung.", Toast.LENGTH_SHORT).show();
+
+                    final String devIP = ipField.getText().toString();
+
+                    Thread reconnectThread = new Thread(new Runnable() {
+
+                        private void ToastMessage(String s) {
+                            try {
+                                final String inUI = s;
+                                mainReference.runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Toast.makeText(mainReference.getApplicationContext(), inUI, Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            } catch (Exception e) {
+                            }
+                        }
+
+                        @Override
+                        public void run() {
+                            if (!validIP(devIP)) {
+                                ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
+                            } else {
+                                Vibrator vib = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+                                vib.vibrate(50);
+                                ToastMessage("Verbindung wird neu gestartet.");
+                                client1 = new Client(devIP, 50007, updateText, serverRequest, mainReference, colorInd);
+                            }
+                        }
+                    });
+                    reconnectThread.start();
                 } else {
                     multiSend("TurnOn SendStatus", true);
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
