@@ -269,27 +269,6 @@ public class Client implements Runnable {
             int end = s.indexOf("</Wasser>");
             String wStatus = s.substring(begin, end);
             sb.append("Wasser: " + wStatus);
-
-            /*if (wStatus.equals("An")) {
-                //recolor2(0);
-                mainActivity.runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Button stb = (Button)mainActivity.findViewById(R.id.start_btn);
-                                stb.setText("Wasser Ausschalten");
-                            }
-                        });
-                        //recolor(250, 40, 0);
-            } else if (wStatus.equals("Aus")) {
-                //recolor2(1);
-                mainActivity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Button stb = (Button) mainActivity.findViewById(R.id.start_btn);
-                        stb.setText("Wasser Anschalten");
-                    }
-                });
-            }*/
         }
 
         if(s.contains("<Temperatur>")){
@@ -305,7 +284,6 @@ public class Client implements Runnable {
                 if(wasserStatus < 100) sb.append("Kalt");
                 if(wasserStatus >= 100 & wasserStatus < 200) sb.append("Warm");
                 if(wasserStatus >= 200 & wasserStatus <= 255) sb.append("Heiß");
-
                 recolor2(temp);
             } catch (NumberFormatException e){
             }
@@ -355,9 +333,6 @@ public class Client implements Runnable {
     @Override
     public void run() {
         System.out.println("STARTING: " + isRunning());
-        //TODO: Auf Pipeline umstellen, while(inputstream.available()) read inputstream - Behebt hoffentlich notify() Probleme
-        //PrintWriter out = new PrintWriter(mainSocket.getOutputStream(), true);
-        //BufferedReader in = new BufferedReader(new InputStreamReader(mainSocket.getInputStream()));
         PrintWriter out = outWriter;
 
         Scanner inScanner = null;
