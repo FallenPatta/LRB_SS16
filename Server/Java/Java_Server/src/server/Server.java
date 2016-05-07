@@ -1,10 +1,20 @@
 package server;
+
 import java.net.*;
+import java.sql.Date;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Scanner;
+import java.util.TimeZone;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import javax.management.modelmbean.XMLParseException;
+
 import java.io.*;
 import clientThread.ClientThread;
 
@@ -13,27 +23,106 @@ public class Server implements Runnable {
 	StringBuilder outBuilder;
 	private boolean waterstatus = false;
 	private int wasserTemp = 0;
-	
+
+	private File outFile;
+	private File inFile;
+
 	public CopyOnWriteArrayList<ClientThread> clients;
-	
-	public Server(){
+
+	public Server() throws FileNotFoundException, IOException {
 		clients = new CopyOnWriteArrayList<ClientThread>();
-		
-		Thread updateWater = new Thread(new Runnable(){
-			public void run(){
-				while(true){
-					if(waterstatus){
-						if(wasserTemp < 255) wasserTemp++;
-					}else if(wasserTemp > 0){
+		outFile = new File("AnforderungsStatus.xml");
+		inFile = new File("VerfuegbarkeitsStatus.xml");
+
+		if (!outFile.exists()) {
+			try {
+				outFile.createNewFile();
+			} catch (IOException e) {
+				throw new IOException(e.toString() + "\nOUTPUT File could not be created.");
+			}
+		}
+
+		if (!inFile.exists()) {
+			inFile.createNewFile();
+			throw new FileNotFoundException(
+					"INPUT File could not be found.\nMake sure you are creating it in the same directory as the output File.");
+		}
+
+		Thread updateWater = new Thread(new Runnable() {
+			public void run() {
+				while (true) {
+					if (waterstatus) {
+						if (wasserTemp < 255)
+							wasserTemp++;
+					} else if (wasserTemp > 0) {
 						wasserTemp--;
 					}
 					WAIT(100);
 				}
 			}
 		});
+
+		Thread updateStatus = new Thread(new Runnable() {
+			public void run() {
+				while (true) {
+					if (waterstatus) {
+						WAIT(60000);
+						waterstatus = false;
+					}
+					WAIT(100);
+				}
+			}
+		});
+
+		Thread statusThread = new Thread(new Runnable() {
+			public void run() {
+				while (true) {
+					try {
+						FileReader r = new FileReader(inFile);
+						Scanner sc = new Scanner(r);
+						String stat = "";
+						while (sc.hasNext())
+							stat += sc.next();
+						int lastStat[] = { stat.lastIndexOf("<Status>"), stat.lastIndexOf("</Status>") };
+						if (lastStat[0] >= lastStat[1])
+							throw new XMLParseException("Could not parse last Status\nXML Format is not compatible");
+						String lastStatus = stat.substring(lastStat[0], lastStat[1]);
+						if (lastStatus.lastIndexOf("<WasserStatus>an</WasserStatus>") > lastStatus
+								.lastIndexOf("<WasserStatus>aus</WasserStatus>"))
+							waterstatus = true;
+						else
+							waterstatus = false;
+
+						int itemp[] = { lastStatus.lastIndexOf("<Temperatur>"),
+								lastStatus.lastIndexOf("</Temperatur>") };
+						if (itemp[0] > 0 && itemp[1] > itemp[0]) {
+							itemp[0] += "<Temperatur>".length();
+							try {
+								int tmp = Integer.parseInt(lastStatus.substring(itemp[0], itemp[1]));
+								if (tmp < 0 | tmp > 255)
+									throw new IllegalArgumentException(
+											"Watertemperature Value must be integer between 0 and 255\nwas: "
+													+ Integer.toHexString(tmp));
+								wasserTemp = tmp;
+							} catch (NumberFormatException e) {
+								throw new IllegalArgumentException(
+										"Watertemerature Value must be integer between 0 and 255\nwas: NAN\nCheck Format");
+							}
+						}
+
+					} catch (XMLParseException | FileNotFoundException e) {
+						e.printStackTrace();
+					}
+					WAIT(15000);
+				}
+			}
+		});
+
+		statusThread.start();
 		updateWater.start();
+		//updateStatus.start();
 	}
-	
+
 	public boolean isWaterstatus() {
 		return waterstatus;
 	}
@@ -46,35 +135,67 @@ public class Server implements Runnable {
 		return wasserTemp;
 	}
 
-	private void WAIT(int millis){
-		try{
+	private void WAIT(int millis) {
+		try {
 			Thread.sleep(millis);
-		}catch(Exception e){
-			
+		} catch (Exception e) {
+
 		}
 	}
-	
-	private String condense(String a, int b){
+
+	public boolean updateAnforderung(int clientID, String clientIP) throws FileNotFoundException {
+		try {
+			FileWriter out = new FileWriter(outFile);
+			if (!outFile.exists()) {
+				out.close();
+				throw new FileNotFoundException("OUTPUT File does not exist");
+			}
+			Calendar c = Calendar.getInstance(Locale.GERMANY);
+			out.write(
+					"<Anforderung>" 
+					+ "<Zustand>an</Zustand>" 
+					+ "<Zeitpunkt>" 
+					+ "<Jahr>" + LocalDateTime.now().getYear() + "</Jahr>" 
+					+ "<Tag>" + LocalDateTime.now().getDayOfYear() + "</Tag>"
+					+ "<Stunde>" + LocalDateTime.now().getHour() + "</Stunde>"
+					+ "<Minute>" + LocalDateTime.now().getMinute() + "</Minute>"
+					+ "<Sekunde>" + LocalDateTime.now().getSecond() + "</Sekunde>" 
+					+ "</Zeitpunkt>" 
+					+ "<MaskedClientID>" + clientID + "</MaskedClientID>" 
+					+ "<ClientIP>" + clientIP + "</ClientIP>" 
+					+ "</Anforderung>"
+					);
+			out.flush();
+			setWaterstatus(true);
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return true;
+	}
+
+	private String condense(String a, int b) {
 		StringBuilder sb = new StringBuilder(String.valueOf(a));
 		sb.append(b);
 		return sb.toString();
 	}
-	
+
 	@Override
-	public void run(){
+	public void run() {
 		int portNumber = 50007;
 		int totalMsgs = 0;
 		boolean waterstatus = false;
 		Integer numClients = 0;
-		
-		Thread checkForDead = new Thread(new Runnable(){
-			public void run(){
-				while(true){
+
+		Thread checkForDead = new Thread(new Runnable() {
+			public void run() {
+				while (true) {
 					Iterator<ClientThread> clientIterator = clients.iterator();
 					while (clientIterator.hasNext()) {
 						ClientThread check = clientIterator.next();
-						if(!check.isConnected()){
-							System.out.println("Removed dead client with index: " + check.toString());
+						if (!check.isConnected()) {
+							SocketAddress ad = check.getAdr();
+							System.out.println("Client with index: " + check.toString()+ " and Address: " + ad.toString() + " decayed");
 							check.disconnect();
 							clients.remove(check);
 						}
@@ -83,30 +204,28 @@ public class Server implements Runnable {
 				}
 			}
 		});
-		
+
 		checkForDead.start();
-		
-		while(true){
+
+		while (true) {
 			System.out.println("connecting...");
-			try ( 
-			    ServerSocket serverSocket = new ServerSocket(portNumber);
-			) {
+			try (ServerSocket serverSocket = new ServerSocket(portNumber);) {
 				System.out.println("Opening Socket Nr.:" + numClients);
 				Socket clientSocket = serverSocket.accept();
 				ClientThread client = new ClientThread(clientSocket, this, numClients);
-				clients.add(0,client);
+				clients.add(0, client);
 				clients.get(0).start();
 				numClients++;
-				
-			}catch(Exception e){
+
+			} catch (Exception e) {
 				System.out.println("could not connect...");
 				WAIT(500);
 			}
 		}
-		
+
 	}
-	
-	public void start(){
+
+	public void start() {
 		t = new Thread(this);
 		t.start();
 	}

@@ -15,6 +15,7 @@ public class ClientThread implements Runnable {
 	private boolean isDead;
 	private int portNumber = 50007;
 	private int totalMsgs = 0;
+	private SocketAddress adr = null;
 	
 	private void WAIT(int millis){
 		try{
@@ -30,8 +31,11 @@ public class ClientThread implements Runnable {
 		this.index = ind;
 		this.isDead = false;
 		this.parent = server;
-		
-		
+		this.adr = this.client.getRemoteSocketAddress();
+	}
+	
+	public SocketAddress getAdr(){
+		return this.adr;
 	}
 	
 	public boolean isConnected(){
@@ -53,7 +57,8 @@ public class ClientThread implements Runnable {
 		}
 		outBuilder.append("</Wasser>");
 		outBuilder.append("<Temperatur>");
-		outBuilder.append(Integer.toString(parent.getWasserTemp()));
+		if(parent.getWasserTemp() <= 255) outBuilder.append(Integer.toString(parent.getWasserTemp()));
+		else outBuilder.append(Integer.toString(0));
 		outBuilder.append("</Temperatur>");
 		outBuilder.append("</Status>");
 		return outBuilder.toString();
@@ -78,19 +83,20 @@ public class ClientThread implements Runnable {
 			    totalMsgs++;
 			    
 			    while (!this.isDead & (inputLine = in.readLine()) != null) {
-			    	System.out.println("Input: " + inputLine);
+			    	//System.out.println("Input: " + inputLine);
 			    	
 			    	if(inputLine.equals("SendStatus")){
 			    		outputLine = buildStatus();
-			    		System.out.println("Sending Status: " + outputLine);
+			    		//System.out.println("Sending Status: " + outputLine);
 			    	}else if(inputLine.equals("TurnOn")){
-			    		parent.setWaterstatus(!parent.isWaterstatus());
+			    		//parent.setWaterstatus(!parent.isWaterstatus());
+			    		parent.updateAnforderung(this.index, client.getRemoteSocketAddress().toString());
 			    		outputLine = buildStatus();
-			    		System.out.println("Sending Status: " + outputLine);
+			    		//System.out.println("Sending Status: " + outputLine);
 			    	}
 			    	else{
 				        outputLine = "OK";
-				        System.out.println("Sending OK: " +  outputLine);
+				        //System.out.println("Sending OK: " +  outputLine);
 			    	}
 			    	
 			        out.println(outputLine);
