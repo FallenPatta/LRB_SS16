@@ -113,7 +113,7 @@ public class Server implements Runnable {
 					} catch (XMLParseException | FileNotFoundException e) {
 						e.printStackTrace();
 					}
-					WAIT(15000);
+					WAIT(25000);
 				}
 			}
 		});

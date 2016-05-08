@@ -1,7 +1,11 @@
 package clientThread;
 
 import java.net.*;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.Scanner;
 import java.io.*;
 import server.Server;
 
@@ -72,35 +76,47 @@ public class ClientThread implements Runnable {
 		try ( 
 			    PrintWriter out = new PrintWriter(client.getOutputStream(), true);
 			    BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+				Scanner sc = new Scanner(client.getInputStream());
 			) {
 				System.out.println("connected");
 				client.setSoTimeout(10000);
 			    String inputLine, outputLine;
-			    
+			    inputLine = "";
 			    outputLine = "connected";
 			    //outputLine = condense(outputLine, totalMsgs);
 			    out.println(outputLine);
 			    totalMsgs++;
 			    
-			    while (!this.isDead & (inputLine = in.readLine()) != null) {
-			    	//System.out.println("Input: " + inputLine);
+			    long lastRead = System.currentTimeMillis();
+			    
+			    while (!this.isDead) {
+			    	if(client.getInputStream().available() > 0){
+			    		lastRead = System.currentTimeMillis();
+			    		while(client.getInputStream().available() > 0) inputLine += sc.next();
+			    		
+			    		//System.out.println("Input: " + inputLine);
 			    	
-			    	if(inputLine.equals("SendStatus")){
-			    		outputLine = buildStatus();
-			    		//System.out.println("Sending Status: " + outputLine);
-			    	}else if(inputLine.equals("TurnOn")){
-			    		//parent.setWaterstatus(!parent.isWaterstatus());
-			    		parent.updateAnforderung(this.index, client.getRemoteSocketAddress().toString());
-			    		outputLine = buildStatus();
-			    		//System.out.println("Sending Status: " + outputLine);
+				    	if(inputLine.contains("TurnOn")){
+				    		int lastTon = inputLine.lastIndexOf("TurnOn") + "TurnOn".length();
+				    		parent.updateAnforderung(this.index, client.getRemoteSocketAddress().toString());
+				    		outputLine = buildStatus();
+				    		out.println(outputLine);
+				    		inputLine = inputLine.substring(lastTon);
+				    		totalMsgs++;
+				    	}else if(inputLine.contains("SendStatus")){
+				    		int lastStat = inputLine.lastIndexOf("SendStatus") + "SendStatus".length();
+				    		outputLine = buildStatus();
+				    		out.println(outputLine);
+				    		inputLine = inputLine.substring(lastStat);
+				    		totalMsgs++;
+				    	}
+				    	else if (inputLine.contains("\n")){
+				    	}
 			    	}
-			    	else{
-				        outputLine = "OK";
-				        //System.out.println("Sending OK: " +  outputLine);
+			    	if(System.currentTimeMillis() - lastRead > 5000){
+			    		break;
 			    	}
-			    	
-			        out.println(outputLine);
-			        totalMsgs++;
+			    	WAIT(20);
 			    }
 			    
 			}catch(Exception e){
