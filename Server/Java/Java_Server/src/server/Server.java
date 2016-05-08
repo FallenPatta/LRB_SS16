@@ -29,10 +29,10 @@ public class Server implements Runnable {
 
 	public CopyOnWriteArrayList<ClientThread> clients;
 
-	public Server() throws FileNotFoundException, IOException {
+	public Server(File in, File out) throws FileNotFoundException, IOException {
 		clients = new CopyOnWriteArrayList<ClientThread>();
-		outFile = new File("AnforderungsStatus.xml");
-		inFile = new File("VerfuegbarkeitsStatus.xml");
+		outFile = out;
+		inFile = in;
 
 		if (!outFile.exists()) {
 			try {
@@ -43,7 +43,6 @@ public class Server implements Runnable {
 		}
 
 		if (!inFile.exists()) {
-			inFile.createNewFile();
 			throw new FileNotFoundException(
 					"INPUT File could not be found.\nMake sure you are creating it in the same directory as the output File.");
 		}
@@ -62,18 +61,6 @@ public class Server implements Runnable {
 			}
 		});
 
-		Thread updateStatus = new Thread(new Runnable() {
-			public void run() {
-				while (true) {
-					if (waterstatus) {
-						WAIT(60000);
-						waterstatus = false;
-					}
-					WAIT(100);
-				}
-			}
-		});
-
 		Thread statusThread = new Thread(new Runnable() {
 			public void run() {
 				while (true) {
@@ -85,7 +72,9 @@ public class Server implements Runnable {
 							stat += sc.next();
 						int lastStat[] = { stat.lastIndexOf("<Status>"), stat.lastIndexOf("</Status>") };
 						if (lastStat[0] >= lastStat[1])
-							throw new XMLParseException("Could not parse last Status\nXML Format is not compatible");
+							throw new XMLParseException("Could not parse last Status\nXML Format is not compatible\n"
+									+ "Make sure you are writing into the correct file" + lastStat[0] + "!"
+									+ lastStat[1]);
 						String lastStatus = stat.substring(lastStat[0], lastStat[1]);
 						if (lastStatus.lastIndexOf("<WasserStatus>an</WasserStatus>") > lastStatus
 								.lastIndexOf("<WasserStatus>aus</WasserStatus>"))
@@ -106,7 +95,7 @@ public class Server implements Runnable {
 								wasserTemp = tmp;
 							} catch (NumberFormatException e) {
 								throw new IllegalArgumentException(
-										"Watertemerature Value must be integer between 0 and 255\nwas: NAN\nCheck Format");
+										"Watertemperature Value must be integer between 0 and 255\nwas: NAN\nCheck Format");
 							}
 						}
 
@@ -119,8 +108,7 @@ public class Server implements Runnable {
 		});
 
 		statusThread.start();
-		updateWater.start();
-		//updateStatus.start();
+		// updateWater.start();
 	}
 
 	public boolean isWaterstatus() {
@@ -151,20 +139,11 @@ public class Server implements Runnable {
 				throw new FileNotFoundException("OUTPUT File does not exist");
 			}
 			LocalDateTime cTime = LocalDateTime.now();
-			out.write(
-					"<Anforderung>" 
-					+ "<Zustand>an</Zustand>" 
-					+ "<Zeitpunkt>" 
-					+ "<Jahr>" + cTime.getYear() + "</Jahr>" 
-					+ "<Tag>" + cTime.getDayOfYear() + "</Tag>"
-					+ "<Stunde>" + cTime.getHour() + "</Stunde>"
-					+ "<Minute>" + cTime.getMinute() + "</Minute>"
-					+ "<Sekunde>" + cTime.getSecond() + "</Sekunde>" 
-					+ "</Zeitpunkt>" 
-					+ "<MaskedClientID>" + clientID + "</MaskedClientID>" 
-					+ "<ClientIP>" + clientIP + "</ClientIP>" 
-					+ "</Anforderung>"
-					);
+			out.write("<Anforderung>" + "<Zustand>an</Zustand>" + "<Zeitpunkt>" + "<Jahr>" + cTime.getYear() + "</Jahr>"
+					+ "<Tag>" + cTime.getDayOfYear() + "</Tag>" + "<Stunde>" + cTime.getHour() + "</Stunde>"
+					+ "<Minute>" + cTime.getMinute() + "</Minute>" + "<Sekunde>" + cTime.getSecond() + "</Sekunde>"
+					+ "</Zeitpunkt>" + "<MaskedClientID>" + clientID + "</MaskedClientID>" + "<ClientIP>" + clientIP
+					+ "</ClientIP>" + "</Anforderung>");
 			out.flush();
 			setWaterstatus(true);
 			out.close();
@@ -174,17 +153,9 @@ public class Server implements Runnable {
 		return true;
 	}
 
-	private String condense(String a, int b) {
-		StringBuilder sb = new StringBuilder(String.valueOf(a));
-		sb.append(b);
-		return sb.toString();
-	}
-
 	@Override
 	public void run() {
 		int portNumber = 50007;
-		int totalMsgs = 0;
-		boolean waterstatus = false;
 		Integer numClients = 0;
 
 		Thread checkForDead = new Thread(new Runnable() {
@@ -195,7 +166,8 @@ public class Server implements Runnable {
 						ClientThread check = clientIterator.next();
 						if (!check.isConnected()) {
 							SocketAddress ad = check.getAdr();
-							System.out.println("Client with index: " + check.toString()+ " and Address: " + ad.toString() + " decayed");
+							System.out.println("Client with index: " + check.toString() + " and Address: "
+									+ ad.toString() + " decayed");
 							check.disconnect();
 							clients.remove(check);
 						}

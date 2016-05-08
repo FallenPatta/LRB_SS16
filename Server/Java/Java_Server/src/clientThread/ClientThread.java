@@ -111,6 +111,7 @@ public class ClientThread implements Runnable {
 				    		totalMsgs++;
 				    	}
 				    	else if (inputLine.contains("\n")){
+				    		inputLine = inputLine.substring(inputLine.indexOf("\n"));
 				    	}
 			    	}
 			    	if(System.currentTimeMillis() - lastRead > 5000){
