@@ -150,16 +150,16 @@ public class Server implements Runnable {
 				out.close();
 				throw new FileNotFoundException("OUTPUT File does not exist");
 			}
-			Calendar c = Calendar.getInstance(Locale.GERMANY);
+			LocalDateTime cTime = LocalDateTime.now();
 			out.write(
 					"<Anforderung>" 
 					+ "<Zustand>an</Zustand>" 
 					+ "<Zeitpunkt>" 
-					+ "<Jahr>" + LocalDateTime.now().getYear() + "</Jahr>" 
-					+ "<Tag>" + LocalDateTime.now().getDayOfYear() + "</Tag>"
-					+ "<Stunde>" + LocalDateTime.now().getHour() + "</Stunde>"
-					+ "<Minute>" + LocalDateTime.now().getMinute() + "</Minute>"
-					+ "<Sekunde>" + LocalDateTime.now().getSecond() + "</Sekunde>" 
+					+ "<Jahr>" + cTime.getYear() + "</Jahr>" 
+					+ "<Tag>" + cTime.getDayOfYear() + "</Tag>"
+					+ "<Stunde>" + cTime.getHour() + "</Stunde>"
+					+ "<Minute>" + cTime.getMinute() + "</Minute>"
+					+ "<Sekunde>" + cTime.getSecond() + "</Sekunde>" 
 					+ "</Zeitpunkt>" 
 					+ "<MaskedClientID>" + clientID + "</MaskedClientID>" 
 					+ "<ClientIP>" + clientIP + "</ClientIP>" 
