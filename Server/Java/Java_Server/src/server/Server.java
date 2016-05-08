@@ -99,10 +99,10 @@ public class Server implements Runnable {
 							}
 						}
 
-					} catch (XMLParseException | FileNotFoundException e) {
+					} catch (XMLParseException | IllegalArgumentException | FileNotFoundException e) {
 						e.printStackTrace();
 					}
-					WAIT(25000);
+					WAIT(10000);
 				}
 			}
 		});

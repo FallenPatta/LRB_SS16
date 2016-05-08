@@ -8,7 +8,7 @@ import server.Server;
 
 public class Main {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) { ///home/david/Servertest
 		Server server1;
 		try {
 			File outFile;

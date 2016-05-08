@@ -13,6 +13,8 @@
   #include <avr/power.h>
 #endif
 
+//#define Reset_AVR() wdt_enable(WDTO_1S); while(1) {}
+
 #define GAUSSMASK 7  //ganze ungerade Zahl
 #define GAUSSMASK_2 GAUSSMASK/2
 
@@ -23,7 +25,7 @@ const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 const char* ssid     = "GladOS-Net";
 const char* password = "thecakeisalie";
 
-const char* host = "192.168.0.49";
+const char* host = "192.168.0.50";
 
 long lastSend = 0;
 long keepAlive = 0;
@@ -34,7 +36,7 @@ bool wasserStatus = false;
 
 volatile char sendQueue[256];
 
-IPAddress ip(192, 168, 0, 69);
+IPAddress ip(192, 168, 0, 70);
 IPAddress gate(192, 168, 0, 1);
 IPAddress net(255, 255, 255, 0);
 
@@ -195,7 +197,7 @@ void wifiConnect() {
   // We start by connecting to a WiFi network
 
   WiFi.mode(WIFI_STA);
-  WiFi.config(ip, gate, net);
+  //WiFi.config(ip, gate, net);
   delay(500);
 
   Serial.println();
@@ -255,7 +257,7 @@ void handlePCINT_1() {
 void pinSetup() {
   pinMode(D1, INPUT);           // set pin to input
   digitalWrite(D1, LOW);       // turn on pullup resistors
-  attachInterrupt(digitalPinToInterrupt(D1), handlePCINT_1, RISING);
+  attachInterrupt(digitalPinToInterrupt(1), handlePCINT_1, RISING);
 }
 
 void setup() {
@@ -321,10 +323,14 @@ bool isAvailable(String s){
   return false;
 }
 
+void (*pseudoReset)(void)=0;
+
 float tmpLast = 0;
 bool wasserLast = true;
+int timeoutConnection = 0;
 
 void loop() {
+  if(timeoutConnection > 5) setup();
   delay(500);
 
   Serial.print("connecting to ");
@@ -341,6 +347,7 @@ void loop() {
       setup();
       return;
     }
+    timeoutConnection++;
     return;
   }
 
