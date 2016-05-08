@@ -23,7 +23,7 @@ const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 const char* ssid     = "GladOS-Net";
 const char* password = "thecakeisalie";
 
-const char* host = "192.168.0.50";
+const char* host = "192.168.0.49";
 
 long lastSend = 0;
 long keepAlive = 0;
