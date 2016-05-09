@@ -8,6 +8,7 @@ import server.Server;
 
 public class Main {
 
+	//TODO: Update Zeit einstellbar machen
 	public static void main(String[] args) { ///home/david/Servertest
 		Server server1;
 		try {

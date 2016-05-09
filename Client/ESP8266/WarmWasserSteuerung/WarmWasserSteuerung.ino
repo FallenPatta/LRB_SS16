@@ -15,7 +15,7 @@
 
 //#define Reset_AVR() wdt_enable(WDTO_1S); while(1) {}
 
-#define GAUSSMASK 7  //ganze ungerade Zahl
+#define GAUSSMASK 5  //ganze ungerade Zahl
 #define GAUSSMASK_2 GAUSSMASK/2
 
 const String commands[] = {"SendStatus", "Ok", "TurnOn"};
@@ -25,7 +25,7 @@ const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 const char* ssid     = "GladOS-Net";
 const char* password = "thecakeisalie";
 
-const char* host = "192.168.0.50";
+const char* host = "192.168.0.51";
 
 long lastSend = 0;
 long keepAlive = 0;
@@ -418,7 +418,7 @@ void loop() {
             else if(!wasserStatus & i>=(int)tmp) { setPixelSollWert(i, ledKalt); }
             else { setPixelSollWert(i, ledKalt); }
         }
-        blurPattern(rVal, gVal, bVal, 1);
+        blurPattern(rVal, gVal, bVal, 2);
         tmpLast = tmp;
       }
       for(int i =0; i<NUMLED; i++){

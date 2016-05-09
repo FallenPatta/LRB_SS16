@@ -56,7 +56,7 @@ public class Server implements Runnable {
 					} else if (wasserTemp > 0) {
 						wasserTemp--;
 					}
-					WAIT(100);
+					WAIT(50);
 				}
 			}
 		});
@@ -99,16 +99,16 @@ public class Server implements Runnable {
 							}
 						}
 
-					} catch (XMLParseException | IllegalArgumentException | FileNotFoundException e) {
+					} catch (XMLParseException | IllegalArgumentException | FileNotFoundException e){
 						e.printStackTrace();
 					}
-					WAIT(10000);
+					WAIT(5000);
 				}
 			}
 		});
 
 		statusThread.start();
-		// updateWater.start();
+		//updateWater.start();
 	}
 
 	public boolean isWaterstatus() {
