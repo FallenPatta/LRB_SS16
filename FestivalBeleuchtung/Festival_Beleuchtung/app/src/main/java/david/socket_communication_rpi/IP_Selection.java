@@ -8,6 +8,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Environment;
@@ -18,6 +19,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -33,6 +35,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 import android.os.Vibrator;
 
@@ -45,7 +48,7 @@ public class IP_Selection extends AppCompatActivity {
 
         if (isSDPresent) {
             try {
-                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Heizung-IP/";
+                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/Festival-IP/";
                 File storageFile = new File(path);
                 if (!storageFile.exists()) {
                     storageFile.mkdirs();
@@ -84,7 +87,7 @@ public class IP_Selection extends AppCompatActivity {
         Boolean isSDPresent = android.os.Environment.getExternalStorageState().equals(android.os.Environment.MEDIA_MOUNTED);
 
         if (isSDPresent) {
-            File file = new File(Environment.getExternalStorageDirectory().getAbsoluteFile() + "/Heizung-IP/" + fname + ".txt");
+            File file = new File(Environment.getExternalStorageDirectory().getAbsoluteFile() + "/Festival-IP/" + fname + ".txt");
 
             StringBuilder text = new StringBuilder();
 
@@ -122,14 +125,79 @@ public class IP_Selection extends AppCompatActivity {
         return "";
     }
 
-    Client client1;
-    private int clientRunning = 0;
-    private String serverRequest = "OK";
-    private IP_Selection mainReference = this;
-
-    public void setClientRunning(int val) {
-        clientRunning = val;
+    double abs(double a){
+        return a >= 0 ? a : -a;
     }
+
+    double[] col = {0,0,0};
+    boolean recoloring = false;
+    double r = 0;
+    double g = 0;
+    double b = 0;
+
+    boolean shiftColor(double r, double g, double b, int thres, int velo){
+
+        if(thres < velo) thres = velo;
+        int thres2 = velo+1;
+        boolean diverging = false;
+        double fr=1, fg=1, fb = 1;
+        if(abs(r - col[0]) > thres2) fr *= velo;
+        if(abs(g - col[1]) > thres2) fg *= velo;
+        if(abs(b - col[2]) > thres2) fb *= velo;
+
+        if(abs(r - col[0]) > thres & r - col[0] > 0){ col[0] += fr; diverging = true;}
+        if(abs(r - col[0]) > thres & r - col[0] < 0){ col[0] -= fr; diverging = true;}
+
+        if(abs(g - col[1]) > thres & g - col[1] > 0){ col[1] += fg; diverging = true;}
+        if(abs(g - col[1]) > thres & g - col[1] < 0){ col[1] -= fg; diverging = true;}
+
+        if(abs(b - col[2]) > thres & b - col[2] > 0){ col[2] += fb; diverging = true;}
+        if(abs(b - col[2]) > thres & b - col[2] < 0){col[2] -= fb; diverging = true;}
+
+        return diverging;
+    }
+
+    void recolor(TextView tView, double red, double green, double blue) {
+        final IP_Selection here = this;
+        final TextView there = tView;
+        r = red;
+        g = green;
+        b = blue;
+
+        //create a new gradient color
+        final GradientDrawable rg = new GradientDrawable();
+
+        rg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
+        rg.setGradientRadius(800);
+
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    if(!recoloring) {
+                        recoloring = true;
+                        while (shiftColor(r, g, b, 10, 5)) {
+                            here.runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    int combinedColor = (0xff << 24) + ((int) col[0] << 16) + ((int) col[1] << 8) + ((int) col[2]);
+                                    int[] color = {combinedColor, Color.parseColor("#00000000")};//Color.parseColor(cString)
+                                    float pos = (float)col[0] + (float)col[1] + (float)col[2];
+                                    pos = pos / 785.0f;
+                                    rg.setGradientCenter(0.2f+(0.6f*pos), 0.35f+(0.3f*pos));
+                                    rg.setColors(color);
+                                    there.setBackground(rg);
+                                }
+                            });
+                            WAIT(10);
+                        }
+                        recoloring = false;
+                    }
+                }
+                }).start();
+    }
+
+    private IP_Selection mainReference = this;
 
     private void WAIT(int millis) {
         try {
@@ -166,23 +234,6 @@ public class IP_Selection extends AppCompatActivity {
         }
     }
 
-    /*private void getSynchronized() {
-        while (client1.isRunning() | isSending) {
-            synchronized (client1.lock) {
-                try {
-                    client1.lock.wait();
-                } catch (InterruptedException e) {
-                }
-            }
-        }
-    }*/
-
-    public void recolor2(int numb) {
-        TextView cTV = (TextView) findViewById(R.id.color_indicator);
-        cTV.setBackgroundResource(R.drawable.gradienten);
-        cTV.getBackground().setLevel(numb);
-    }
-
     protected String wifiIpAddress(Context context) {
         WifiManager wifiManager = (WifiManager) context.getSystemService(WIFI_SERVICE);
         int ipAddress = wifiManager.getConnectionInfo().getIpAddress();
@@ -217,21 +268,6 @@ public class IP_Selection extends AppCompatActivity {
         }
     }
 
-    //Commands must be separated by Space
-    public void multiSend(String s, boolean front) {
-            final String str = s;
-            final String[] commands = str.split(" ");
-            final boolean fr = front;
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < commands.length; i++) {
-                    client1.appendMessage(commands[i], fr);
-                }
-            }
-        }).start();
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -239,11 +275,15 @@ public class IP_Selection extends AppCompatActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         final EditText ipField = (EditText) findViewById(R.id.ip_text);
-        final TextView updateText = (TextView) findViewById(R.id.update_text);
+        ipField.bringToFront();
+        ipField.invalidate();
         final TextView colorInd = (TextView) findViewById(R.id.color_indicator);
-        final Button statBtn = (Button) findViewById(R.id.status_btn);
-
-        colorInd.getBackground().setLevel(2);
+        final SeekBar redBar = (SeekBar) findViewById(R.id.red_slider);
+        final SeekBar greenBar = (SeekBar) findViewById(R.id.green_slider);
+        final SeekBar blueBar = (SeekBar) findViewById(R.id.blue_slider);
+        redBar.setMax(255); greenBar.setMax(255); blueBar.setMax(255);
+        redBar.setProgress(255 / 2); greenBar.setProgress(255 / 2); blueBar.setProgress(255/2);
+        recolor(colorInd, 255/2,255/2,255/2);
 
         int actionBarTitleId = Resources.getSystem().getIdentifier("action_bar_title", "id", "android");
         if (actionBarTitleId > 0) {
@@ -253,19 +293,11 @@ public class IP_Selection extends AppCompatActivity {
             }
         }
 
-        updateText.setSelected(true);
-
-        //updateText.setMovementMethod(new ScrollingMovementMethod());
-        serverRequest = "OK";
-
-        //client1 = new Client("127.0.0.1", 50007, updateText, serverRequest, statusText, mainReference);
-        client1 = new Client("127.0.0.1", 50007, updateText, serverRequest, mainReference, colorInd);
-        clientRunning = 0;
-        //WAIT(500);
-        String savedIP = readFile("HeizungIP");
+        String savedIP = readFile("FestivalIP");
         if (validIP(savedIP)) {
             ipField.setText(savedIP);
-            client1 = new Client(savedIP, 50007, updateText, serverRequest, mainReference, colorInd);
+        } else{
+            ipField.setText("192.168.0.2");
         }
 
         colorInd.setOnClickListener(new View.OnClickListener() {
@@ -278,151 +310,68 @@ public class IP_Selection extends AppCompatActivity {
             }
         });
 
-        findViewById(R.id.this_ip_btn).setOnClickListener(new View.OnClickListener() {
-            Context context = getApplicationContext();
-
-            @Override
-            public void onClick(View v) {
-                String ipAddress = wifiIpAddress(context);
-                if (validIP(ipAddress)) {
-                    updateText.setText(ipAddress);
-                } else {
-                    updateText.setText("Keine geeignete IP Adresse.");
-                }
-            }
-        });
-
-        findViewById(R.id.start_client_btn).setOnClickListener(new View.OnClickListener() {
-            Context context = getApplicationContext();
-
-            @Override
-            public void onClick(View v) {
-                String deviceIP = ipField.getText().toString();
-
-                final String devIP = deviceIP;
-
-                Thread reconnectThread = new Thread(new Runnable() {
-
-                    private void ToastMessage(String s) {
-                        try {
-                            final String inUI = s;
-                            mainReference.runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Toast.makeText(mainReference.getApplicationContext(), inUI, Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                        } catch (Exception e) {
-                        }
-                    }
-
-                    @Override
-                    public void run() {
-                        if (clientRunning == 0) {
-                            if (!validIP(devIP)) {
-                                ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
-                            } else {
-                                Vibrator vib = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-                                vib.vibrate(50);
-                                ToastMessage("Verbindung wird neu gestartet.");
-                                client1 = new Client(devIP, 50007, updateText, serverRequest, mainReference, colorInd);
-                            }
-                        } else {
-                            ToastMessage("Verbindung wird geprüft.");
-                            multiSend("OK", false);
-                            mainReference.WAIT(100);
-                            if (clientRunning == 1) {
-                                ToastMessage("Es besteht bereits eine Verbindung. Wenn diese nicht nutzbar scheint hilft wahrscheinlich ein Neustart.");
-                            } else {
-                                ToastMessage("Keine Verbindung gefunden. Verbindung wird neu gestartet.");
-                                mainReference.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        recolor2(2);
-                                    }
-                                });
-                                if (!validIP(devIP)) {
-                                    ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
-                                } else {
-                                    client1 = new Client(devIP, 50007, updateText, serverRequest, mainReference, colorInd);
-                                }
-                            }
-                        }
-                    }
-                });
-                reconnectThread.start();
-            }
-        });
-
         findViewById(R.id.start_btn).setOnClickListener(new View.OnClickListener() {
             Context context = getApplicationContext();
 
             @Override
             public void onClick(View v) {
-                if (clientRunning == 0) {
-                    Toast.makeText(context, "Es besteht keine Verbindung.", Toast.LENGTH_SHORT).show();
-
-                    final String devIP = ipField.getText().toString();
-
-                    Thread reconnectThread = new Thread(new Runnable() {
-
-                        private void ToastMessage(String s) {
-                            try {
-                                final String inUI = s;
-                                mainReference.runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        Toast.makeText(mainReference.getApplicationContext(), inUI, Toast.LENGTH_SHORT).show();
-                                    }
-                                });
-                            } catch (Exception e) {
-                            }
-                        }
-
-                        @Override
-                        public void run() {
-                            if (!validIP(devIP)) {
-                                ToastMessage("Bitte eine valide IPv4 Adresse eingeben.");
-                            } else {
-                                Vibrator vib = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-                                vib.vibrate(50);
-                                ToastMessage("Verbindung wird neu gestartet.");
-                                client1 = new Client(devIP, 50007, updateText, serverRequest, mainReference, colorInd);
-                            }
-                        }
-                    });
-                    reconnectThread.start();
-                } else {
-                    multiSend("TurnOn SendStatus", true);
-                    Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
-                    vib.vibrate(30);
-                }
-            }
-        });
-
-        findViewById(R.id.stop_btn).setOnClickListener(new View.OnClickListener() {
-            Context context = getApplicationContext();
-
-            @Override
-            public void onClick(View v) {
-                client1.stopThread();
-                clientRunning = 0;
-                Toast.makeText(context, "Client closed", Toast.LENGTH_SHORT).show();
-
                 Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
                 vib.vibrate(30);
-
-                //Restarts Application
-                Intent mStartActivity = new Intent(context, IP_Selection.class);
-                int mPendingIntentId = 123456;
-                PendingIntent mPendingIntent = PendingIntent.getActivity(context, mPendingIntentId, mStartActivity, PendingIntent.FLAG_CANCEL_CURRENT);
-                AlarmManager mgr = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-                mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent);
-
-                finish();
-                System.exit(0);
             }
         });
+
+        redBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                recolor(colorInd, redBar.getProgress(), g, b);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        greenBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                recolor(colorInd, r, greenBar.getProgress(), b);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        blueBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                recolor(colorInd, r, g, blueBar.getProgress());
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+
 
         findViewById(R.id.save_btn).setOnClickListener(new View.OnClickListener() {
             Context context = getApplicationContext();
@@ -430,8 +379,8 @@ public class IP_Selection extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (validIP(ipField.getText().toString())) {
-                    removeFile(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Heizung-IP/HeizungIP.txt");
-                    saveToFile("HeizungIP", ipField.getText().toString());
+                    removeFile(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Festival-IP/FestivalIP.txt");
+                    saveToFile("FestivalIP", ipField.getText().toString());
                     Toast.makeText(context, "Gespeichert", Toast.LENGTH_SHORT).show();
                     Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
                     vib.vibrate(30);
@@ -452,42 +401,6 @@ public class IP_Selection extends AppCompatActivity {
             }
         });
 
-        findViewById(R.id.status_btn).setOnClickListener(new View.OnClickListener() {
-            Context context = getApplicationContext();
-
-            @Override
-            public void onClick(View v) {
-                if (clientRunning == 0) {
-                    Toast.makeText(context, "Nicht verbunden.", Toast.LENGTH_SHORT).show();
-                } else if (client1.isRunning()) {
-                } else {
-                    multiSend("SendStatus", false);
-                    Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
-                    vib.vibrate(30);
-                }
-            }
-        });
-
-        findViewById(R.id.sendalot).setOnClickListener(new View.OnClickListener() {
-            Context context = getApplicationContext();
-
-            @Override
-            public void onClick(View v) {
-                if (clientRunning == 0) {
-                    Toast.makeText(context, "Nicht verbunden.", Toast.LENGTH_SHORT).show();
-                } else {
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            for (int i = 0; i<1000; i++)multiSend("SendStatus", false);
-                        }
-                    }).start();
-                    Vibrator vib = (Vibrator) this.context.getSystemService(Context.VIBRATOR_SERVICE);
-                    vib.vibrate(30);
-                }
-            }
-        });
-
         client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
 
@@ -501,13 +414,13 @@ public class IP_Selection extends AppCompatActivity {
 
         Action viewAction = Action.newAction(
                 Action.TYPE_VIEW, // TODO: choose an action type.
-                "IP_Selection Page", // TODO: Define a title for the content shown.
+                "Farbauswahl", // TODO: Define a title for the content shown.
                 // TODO: If you have web page content that matches this app activity's content,
                 // make sure this auto-generated web page URL is correct.
                 // Otherwise, set the URL to null.
                 Uri.parse("http://host/path"),
                 // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://david.socket_communication_rpi/http/host/path")
+                Uri.parse("android-app://david.festival_color_selection/http/host/path")
         );
         AppIndex.AppIndexApi.start(client, viewAction);
     }
@@ -516,20 +429,18 @@ public class IP_Selection extends AppCompatActivity {
     public void onStop() {
         super.onStop();
 
-        client1 = null;
-        clientRunning = 0;
         finish();
         System.exit(0);
 
         Action viewAction = Action.newAction(
                 Action.TYPE_VIEW, // TODO: choose an action type.
-                "IP_Selection Page", // TODO: Define a title for the content shown.
+                "Farbauswahl", // TODO: Define a title for the content shown.
                 // TODO: If you have web page content that matches this app activity's content,
                 // make sure this auto-generated web page URL is correct.
                 // Otherwise, set the URL to null.
                 Uri.parse("http://host/path"),
                 // TODO: Make sure this auto-generated app deep link URI is correct.
-                Uri.parse("android-app://david.socket_communication_rpi/http/host/path")
+                Uri.parse("android-app://david.festival_color_selection/http/host/path")
         );
         AppIndex.AppIndexApi.end(client, viewAction);
         client.disconnect();

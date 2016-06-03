@@ -8,8 +8,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/launcher_showerhead"
-        android:label="Warmwasser Steuerung"
+        android:icon="@mipmap/launcher_rgb"
+        android:label="Festival_Beleuchtung"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:screenOrientation="nosensor"

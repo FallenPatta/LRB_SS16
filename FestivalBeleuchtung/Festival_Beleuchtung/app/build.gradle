@@ -5,7 +5,7 @@ android {
     buildToolsVersion "19.1.0"
 
     defaultConfig {
-        applicationId "david.socket_communication_rpi"
+        applicationId "david.festival_color_selection"
         minSdkVersion 16
         targetSdkVersion 23
         versionCode 1

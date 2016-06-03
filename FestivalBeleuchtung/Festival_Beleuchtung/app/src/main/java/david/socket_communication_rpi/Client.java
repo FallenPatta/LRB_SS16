@@ -29,52 +29,42 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Client implements Runnable {
     Thread t;
-    private int portNumber = 50007;
+    private int portNumber = 5000;
     private String hostName = "127.0.0.1";
-    private TextView latestMessage;
-    private TextView indication;
     private IP_Selection mainActivity;
     private Socket mainSocket;
-    private List<String> commandArray = Collections.synchronizedList(new ArrayList<String>());
-    public Object lock = new Object();
-    public final Lock mutex = new ReentrantLock(true);
+    private String message;
 
     //public Client(String host, int pNum, TextView lm, String req, TextView infoView, IP_Selection mainAct) {
-    public Client(String host, int pNum, TextView lm, String req, IP_Selection mainAct, TextView indicator) {
+    public Client(String host, int pNum, IP_Selection mainAct) {
         hostName = host;
         portNumber = pNum;
-        latestMessage = lm;
-        indication = indicator;
         mainActivity = mainAct;
-        Thread Tconnect = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                if (!hostName.equals("127.0.0.1")) {
-                    connectSocket();
-                }
-            }
-        });
-        Tconnect.start();
     }
 
-    private void connectSocket() {
+    public void connectSocket(String msg) {
 
         try {
             mainSocket = new Socket(hostName, portNumber);
             mainSocket.setSoTimeout(5000);
-        } catch (UnknownHostException e) {
-            System.out.println("Unknown host: " + hostName);
-            UPoutput("Could not reach host");
-            mainActivity.setClientRunning(0);
-            return;
-        } catch (IOException e) {
-            System.out.println("No I/O");
-            UPoutput("Connection broke");
-            mainActivity.setClientRunning(0);
-            return;
+            message = msg;
+        }
+        catch (Exception e){
+            ToastMessage(e.getMessage());
+            e.printStackTrace();
         }
 
         start();
+    }
+
+    public void setHostName(String host){
+        if(validIP(host)){
+            this.hostName = host;
+        }
+    }
+
+    public void setPortNumber(int port){
+        if(port <= 65535) this.portNumber = port;
     }
 
     private void WAIT(long millis) {
@@ -83,60 +73,6 @@ public class Client implements Runnable {
         } catch (Exception e) {
 
         }
-    }
-
-    private void UPoutput(String s) {
-        try {
-            final String inUI = s;
-            mainActivity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    latestMessage.setText(inUI);
-                }
-            });
-        } catch (Exception e) {
-        }
-    }
-
-    private int[] overlayColors(int colors1[], int colors2[], double norm){
-
-        int color[] = {
-                Color.argb(0xff, (int)(Color.red(colors2[0]) * norm + Color.red(colors1[0]) * (1-norm)), (int)(Color.green(colors2[0]) * norm + Color.green(colors1[0]) * (1-norm)), (int)(Color.blue(colors2[0]) * norm + Color.blue(colors1[0]) * (1-norm)))
-                ,   Color.argb(0xff, (int)(Color.red(colors2[1]) * norm + Color.red(colors1[1]) * (1-norm)), (int)(Color.green(colors2[1]) * norm + Color.green(colors1[1]) * (1-norm)), (int)(Color.blue(colors2[1]) * norm + Color.blue(colors1[1]) * (1-norm)))
-                ,   Color.argb(0xff, (int)(Color.red(colors2[2]) * norm + Color.red(colors1[2]) * (1-norm)), (int)(Color.green(colors2[2]) * norm + Color.green(colors1[2]) * (1-norm)), (int)(Color.blue(colors2[2]) * norm + Color.blue(colors1[2]) * (1-norm)))
-        };
-
-        return color;
-    }
-
-    private void recolor2(int temp) {
-        final IP_Selection here = mainActivity;
-        final TextView there = indication;
-        final int temperatur = temp;
-        //int[] colors2 = {Color.parseColor("#FF800000"),Color.parseColor("#FFFF0000"), Color.parseColor("#FFFFAF00")};
-        //int[] colors1 = {Color.parseColor("#FF000050"),Color.parseColor("#FF168CAF"), Color.parseColor("#FFFFFFFF")};
-
-        //create a new gradient color
-        final GradientDrawable rg = new GradientDrawable();
-
-        rg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-
-        here.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                    double norm = (double) 180 / 255.0;
-                    int[] colors2 = {Color.parseColor("#FF800000"),Color.parseColor("#FFFF0000"), Color.parseColor("#FFFFAF00")};
-                    int[] colors1 = {Color.parseColor("#FF000050"),Color.parseColor("#FF168CAF"), Color.parseColor("#FFFFFFFF")};
-
-                    int color[] = overlayColors(colors1, colors2, norm);
-
-                    rg.setColors(color);
-                    rg.setGradientRadius(550);
-                    rg.setGradientCenter(0.5f, 1.0f);
-                    there.setBackground(rg);
-                    WAIT(10);
-                }
-        });
     }
 
     private void ToastMessage(String s) {
@@ -152,9 +88,31 @@ public class Client implements Runnable {
         }
     }
 
-    private String calculateUseroutput(String s) {
-        //TODO: Useroutput anpassen
-        return null;
+    public static boolean validIP(String ip) {
+        try {
+            if (ip == null || ip.isEmpty()) {
+                return false;
+            }
+
+            String[] parts = ip.split("\\.");
+            if (parts.length != 4) {
+                return false;
+            }
+
+            for (String s : parts) {
+                int i = Integer.parseInt(s);
+                if ((i < 0) || (i > 255)) {
+                    return false;
+                }
+            }
+            if (ip.endsWith(".")) {
+                return false;
+            }
+
+            return true;
+        } catch (NumberFormatException nfe) {
+            return false;
+        }
     }
 
     @TargetApi(Build.VERSION_CODES.KITKAT)
@@ -166,7 +124,6 @@ public class Client implements Runnable {
     }
 
     public void start() {
-        mainActivity.setClientRunning(1);
         t = new Thread(this);
         t.start();
     }
