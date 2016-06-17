@@ -184,7 +184,7 @@ public class IP_Selection extends AppCompatActivity {
                                     int[] color = {combinedColor, Color.parseColor("#00000000")};//Color.parseColor(cString)
                                     float pos = (float)col[0] + (float)col[1] + (float)col[2];
                                     pos = pos / 785.0f;
-                                    rg.setGradientCenter(0.2f+(0.6f*pos), 0.35f+(0.3f*pos));
+                                    rg.setGradientCenter(0.2f+(0.6f*pos), 0.2f+(0.6f*pos));
                                     rg.setColors(color);
                                     there.setBackground(rg);
                                 }

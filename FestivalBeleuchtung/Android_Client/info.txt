@@ -1,0 +1,12 @@
+in activity
+
+Display display = getWindowManager().getDefaultDisplay();
+Point size = new Point();
+display.getSize(size);
+int width = size.x;
+int height = size.y;
+
+outside activity
+
+WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+Display display = wm.getDefaultDisplay();
