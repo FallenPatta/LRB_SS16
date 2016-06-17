@@ -21,8 +21,7 @@
 
 const String commands[] = {"SendStatus", "Ok", "TurnOn"};
 
-const char *ssid = "FESTIVAL-WLAN";
-//const char *password = "thereisnospoon";
+const char *ssid = "FEUERTANZ-WLAN";
 
 IPAddress localip(192, 168, 0, 2);
 IPAddress gateway(192, 168, 0, 1);
@@ -35,7 +34,7 @@ boolean alreadyConnected = false;
 
 volatile char sendQueue[256];
 
-#define NUMLED  24
+#define NUMLED  64
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUMLED, D3, NEO_GRB + NEO_KHZ800);
 
@@ -51,34 +50,32 @@ double rVal[NUMLED];
 double gVal[NUMLED];
 double bVal[NUMLED];
 
-const uint32_t ledWarm = strip.Color(120,0,0);
-const uint32_t ledKalt = strip.Color(60,60,120);
+const uint8_t gammatable[] = {
+     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+     0,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,
+     2,   2,   2,   2,   3,   3,   3,   3,   3,   3,   4,   4,   4,   4,   5,   5,
+     5,   5,   6,   6,   6,   6,   7,   7,   7,   8,   8,   8,   9,   9,   9,  10,
+    10,  10,  11,  11,  11,  12,  12,  13,  13,  13,  14,  14,  15,  15,  16,  16,
+    17,  17,  18,  18,  19,  19,  20,  20,  21,  21,  22,  23,  23,  24,  24,  25,
+    26,  26,  27,  28,  28,  29,  30,  30,  31,  32,  32,  33,  34,  35,  35,  36,
+    37,  38,  38,  39,  40,  41,  42,  43,  43,  44,  45,  46,  47,  48,  49,  50,
+    50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
+    67,  68,  69,  70,  71,  72,  73,  74,  76,  77,  78,  79,  80,  82,  83,  84,
+    85,  87,  88,  89,  90,  92,  93,  94,  96,  97,  98, 100, 101, 102, 104, 105,
+   107, 108, 110, 111, 112, 114, 115, 117, 118, 120, 121, 123, 125, 126, 128, 129,
+   131, 133, 134, 136, 137, 139, 141, 142, 144, 146, 147, 149, 151, 153, 154, 156,
+   158, 160, 162, 163, 165, 167, 169, 171, 173, 175, 176, 178, 180, 182, 184, 186,
+   188, 190, 192, 194, 196, 198, 200, 202, 204, 206, 208, 210, 213, 215, 217, 219,
+   221, 223, 225, 228, 230, 232, 234, 237, 239, 241, 243, 246, 248, 250, 253, 255 };
 
-uint8_t gammatable[] = {
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,
-    1,  1,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
-    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
-   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
-   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
-   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
-   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
-   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
-   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
-
-void colorWipe(uint32_t c, uint8_t wait) {
+/*
+void colorWipe(uint32_t c) {
   for (uint16_t i = 0; i < strip.numPixels(); i++) {
     strip.setPixelColor(i, c);
-    strip.show();
-    delay(wait);
   }
+  strip.show();
 }
+*/
 
 boolean convergeLED(int num, double toR, double toG, double toB,double thres, double velo){
   if(thres < velo) thres = velo;
@@ -101,6 +98,7 @@ boolean convergeLED(int num, double toR, double toG, double toB,double thres, do
   return diverging;
 }
 
+/*
 void blurPattern(double * r, double * g, double * b, int numTimes = 1){
   if(numTimes<1) numTimes = 1;
   for(int i = 0; i<numTimes; i++){
@@ -124,6 +122,7 @@ void blurPattern(double * r, double * g, double * b, int numTimes = 1){
      }
   }
 }
+*/
 
 void setPixelSollWert(int num, uint32_t c){
   rVal[num] = ((uint8_t)(c >> 16 & 255));
@@ -152,6 +151,8 @@ void apSetup(){
 }
 
 void processRequest(String s){
+  Serial.print("input: ");
+  Serial.println(s);
   if(s.length() != 6) return;
   String red = s.substring(0,2);
   String green = s.substring(2,4);
@@ -160,7 +161,11 @@ void processRequest(String s){
   int hexGreen = strtol(green.c_str(),NULL,16);
   int hexBlue = strtol(blue.c_str(),NULL,16);
   uint32_t col = ((uint32_t) hexRed << 16) + ((uint32_t) hexGreen << 8) + ((uint32_t) hexBlue);
-  for(int i = 0; i<NUMLED; i++) setPixelSollWert(i, col);
+  Serial.print(hexRed, HEX);
+  Serial.print(hexGreen, HEX);
+  Serial.println(hexBlue, HEX);
+  //for(int i = 0; i<NUMLED; i++) setPixelSollWert(i, col);
+  setPixelSollWert(0, col);
 }
 
 void setup() {
@@ -197,10 +202,14 @@ void loop() {
     //<connect routine>
     if(reconnect){
       client = server.available();
-      if(client) reconnect = false;
+      delay(5);
+      if(client){
+        reconnect = false;
+        watcher = millis();
       }
+    }
 
-   if(abs(millis()-watcher) > timeout){
+   if(client & (!client.available() || abs(millis()-watcher) > timeout)){
     Serial.println("reset");
     client.stop();
     reconnect = true;
@@ -228,6 +237,7 @@ void loop() {
         input = input.substring(input.indexOf('\n')+1);
         Serial.println(request);
         processRequest(request);
+        watcher = millis();
       }
     }
    //</arbeitsroutine>
@@ -235,10 +245,15 @@ void loop() {
     if(!cnt) {
       tStart = micros();
     }
+      convergeLED(0, rVal[0], gVal[0], bVal[0], 0, 5);
       for(int i =0; i<NUMLED; i++){
-          convergeLED(i, rVal[i], gVal[i], bVal[i], 5, 5);
-          strip.setPixelColor(i,strip.Color(gammatable[(uint8_t)r[i]],gammatable[(uint8_t)g[i]],gammatable[(uint8_t)b[i]]));
+          strip.setPixelColor(i,strip.Color(gammatable[(uint8_t)r[0]],gammatable[(uint8_t)g[0]],gammatable[(uint8_t)b[0]]));
       }
+            
+      //for(int i =0; i<NUMLED; i++){
+      //    convergeLED(i, rVal[i], gVal[i], bVal[i], 0, 5);
+      //    strip.setPixelColor(i,strip.Color(gammatable[(uint8_t)r[i]],gammatable[(uint8_t)g[i]],gammatable[(uint8_t)b[i]]));
+      //}
       strip.show();
   if(cnt){
       long error = (20000 - (long)average);
@@ -255,7 +270,7 @@ void loop() {
       cnt++;
       tEnd = micros();
       last_average = average;
-      average -= (average + (tStart-tEnd))/(float)cnt;
+      if(abs(tEnd - tStart) < 100000) average -= (average + (tStart-tEnd))/(float)cnt;
       if(cnt) tStart = tEnd;
   }
 
